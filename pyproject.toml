@@ -32,8 +32,8 @@ dev = [
 ]
 docs = [
     "sphinx",
-    "sphinx_rtd_theme",
-    "myst_nb"
+    "myst_parser",
+    "furo",
 ]
 
 [project.urls]
