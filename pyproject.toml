@@ -8,6 +8,7 @@ version = "0.0.2"
 authors = [
     { name="Chanhyuk Jung", email="urw7rs@stu.kmu.ac.kr" },
 ]
+license = { file = "LICENSE" }
 description = "Diffusion Models Made Easy"
 readme = "README.md"
 requires-python = ">=3.7"
