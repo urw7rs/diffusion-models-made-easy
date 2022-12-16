@@ -5,7 +5,7 @@ from torch import nn
 from torch.optim import Adam
 from torchmetrics.image.fid import FrechetInceptionDistance
 
-from dmme.common import denorm
+from dmme.common import denorm, make_history
 from dmme.lr_scheduler import WarmupLR
 
 from .ddpm_sampler import DDPMSampler
