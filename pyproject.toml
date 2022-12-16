@@ -28,4 +28,4 @@ tests = ["pytest"]
 dev = ["black", "flake8"]
 
 [project.urls]
-"Homepage" = "https://github.com/urw7rs/diffusion_models_made_easy"
+"Homepage" = "https://github.com/urw7rs/diffusion-models-made-easy"
