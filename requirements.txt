@@ -1,0 +1,7 @@
+torch
+torchvision
+einops
+pytorch-lightning
+jsonargparse[signatures]
+torchmetrics[image]
+wandb
