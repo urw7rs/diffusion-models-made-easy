@@ -3,8 +3,9 @@
 % You can adapt this file completely to your liking, but it should at least
 % contain the root `toctree` directive.
 
-```{include} ../../README.md
-```
+# Diffusion Models Made Easy
+
+Easy to understand diffusion model implementations in Pytorch.
 
 ```{warning}
 This library is under heavy development.
@@ -13,4 +14,6 @@ This library is under heavy development.
 ```{toctree}
 :caption: 'Contents:'
 :maxdepth: 4
+
+install
 ```
