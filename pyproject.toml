@@ -8,6 +8,7 @@ version = "0.0.2"
 authors = [
     { name="Chanhyuk Jung", email="urw7rs@stu.kmu.ac.kr" },
 ]
+license = { file = "LICENSE" }
 description = "Diffusion Models Made Easy"
 readme = "README.md"
 requires-python = ">=3.7"
@@ -15,17 +16,25 @@ dependencies = [
     "torch",
     "torchvision",
     "einops",
-]
-
-[project.optional-dependencies]
-trainer = [
     "pytorch-lightning",
     "jsonargparse[signatures]>=4.12.0",
     "torchmetrics[image]",
     "wandb",
 ]
+
+[project.optional-dependencies]
 tests = ["pytest"]
-dev = ["black", "flake8"]
+dev = [
+    "black",
+    "flake8",
+    "sphinx-autobuild",
+]
+docs = [
+    "sphinx",
+    "myst_parser",
+    "furo",
+    "sphinxcontrib-katex",
+]
 
 [project.urls]
 "Homepage" = "https://github.com/urw7rs/diffusion-models-made-easy"

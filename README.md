@@ -6,11 +6,31 @@ Diffusion Models Made Easy(`dmme`) is a collection of easy to understand diffusi
 
 ## Installation
 
+Install from pip
+
 ```bash
 pip install dmme
 ```
 
 installing `dmme` in edit mode requires `pip>=22.3`, update pip by running `pip install -U pip`
+
+Install for customization or development
+
+```bash
+pip install -e ".[dev]"
+```
+
+Install dependencies for testing
+
+```bash
+pip install dmme[tests]
+```
+
+Install dependencies for docs
+
+```bash
+pip install dmme[docs]
+```
 
 ## Training
 
@@ -26,19 +46,14 @@ Train DDPM from python using pytorch-lightning
 from pytorch_lightning import Trainer
 
 from pytorch_lightning.loggers import WandbLogger
-from pytorch_lightning.callbacks import LearningRateMonitor, ModelCheckpoint
 
-from dmme import LitDDPM, CIFAR10
+from dmme import LitDDPM, DDPMSampler, CIFAR10
 from dmme.ddpm import UNet
 
 
 def main():
     trainer = Trainer(
         logger=WandbLogger(project="CIFAR10 Image Generation", name="DDPM"),
-        callbacks=[
-            ModelCheckpoint(save_last=True),
-            LearningRateMonitor(),
-        ],
         gradient_clip_val=1.0,
         auto_select_gpus=True,
         accelerator="gpu",
@@ -47,11 +62,12 @@ def main():
     )
 
     ddpm = LitDDPM(
-        decoder=UNet(in_channels=3),
+        DDPMSampler(UNet(in_channels=3), timesteps=1000),
         lr=2e-4,
         warmup=5000,
         imgsize=(3, 32, 32),
         timesteps=1000,
+        decay=0.9999,
     )
     cifar10 = CIFAR10()
 
@@ -79,7 +95,7 @@ from dmme.lr_scheduler import WarmupLR
 from dmme.noise_schedules import linear_schedule
 
 
-def train(timesteps=1000, lr=2e-4, warmup=5000, max_steps=800_000):
+def train(timesteps=1000, lr=2e-4, clip_val=1.0, warmup=5000, max_steps=800_000):
     device = torch.device("cuda") if torch.cuda.is_available() else "cpu"
 
     model = UNet()
@@ -106,12 +122,15 @@ def train(timesteps=1000, lr=2e-4, warmup=5000, max_steps=800_000):
 
             optimizer.zero_grad()
             loss.backward()
+
+            torch.nn.utils.clip_grad_norm(sampler.parameters(), clip_val)
+
             optimizer.step()
             lr_scheduler.step()
 
             steps += 1
 
-            prog_bar.set_postfix({"loss": loss.cpu().item(), "steps": steps})
+            prog_bar.set_postfix({"loss": loss, "steps": steps})
 
             if steps == max_steps:
                 break
@@ -123,4 +142,3 @@ if __name__ == "__main__":
 
 ## Supported Diffusion Models
 - [DDPM](https://arxiv.org/abs/2006.11239)
-- Score Based Models comming soon...
