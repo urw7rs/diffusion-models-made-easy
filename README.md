@@ -4,6 +4,8 @@ Diffusion Models Made Easy(`dmme`) is a collection of easy to understand diffusi
 
 # Getting Started
 
+Documentation is available at https://diffusion-models-made-easy.readthedocs.io/en/latest/
+
 ## Installation
 
 Install from pip
