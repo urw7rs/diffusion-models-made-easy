@@ -5,12 +5,25 @@ import math
 
 import torch
 from torch import nn
+import torch.nn.functional as F
 
 import einops
 
 
+__all__ = [
+    "TimeStepEmbedding",
+    "SinusoidalPositionEmbeddings",
+    "Block",
+    "DownSample",
+    "UpSample",
+    "Attention",
+    "ResBlock",
+    "conv2d",
+]
+
+
 class UNet(nn.Module):
-    """UNet with GroupNorm and Attention to predict noise from input
+    """UNet with GroupNorm and Attention, Predicts noise from :math:`x_t` and :math:`t`
 
     Args:
         in_channels (int): input image channels
@@ -101,7 +114,7 @@ class UNet(nn.Module):
         )
 
     def forward(self, x, t):
-        r"""Predict noise given :math:`x_t` and :math:`t`
+        r"""Using timestep embeddings, predict noise to denoise :math:`x_t` from :math:`x_t` and :math:`t` using a UNet
 
         Args:
             x (torch.Tensor): :math:`x_t`, tensor of shape :math:`(N, C, H, W)`
@@ -132,35 +145,8 @@ class UNet(nn.Module):
         return x
 
 
-class SinusoidalPositionEmbeddings(nn.Module):
-    """Transformer position embedding
-
-    Args:
-        dim (int): dim
-    """
-
-    def __init__(self, dim):
-        super().__init__()
-        self.dim = dim
-
-    def forward(self, time):
-        """Embed time :math:`t` as a Sinusoidal Position Embedding
-
-        Args:
-            time (torch.Tensor): :math:`t`, a tensor of shape :math:`(T,)`
-        """
-
-        device = time.device
-        half_dim = self.dim // 2
-        embeddings = math.log(10000) / (half_dim - 1)
-        embeddings = torch.exp(torch.arange(half_dim, device=device) * -embeddings)
-        embeddings = time[:, None] * embeddings[None, :]
-        embeddings = torch.cat((embeddings.sin(), embeddings.cos()), dim=-1)
-        return embeddings
-
-
 class TimeStepEmbedding(nn.Module):
-    """Timestep embedding mlp
+    """Timestep embedding network
 
     Args:
         pos_dim (int): sinusoidal position encoding dim
@@ -182,9 +168,48 @@ class TimeStepEmbedding(nn.Module):
         )
 
     def forward(self, t):
+        """Encode :math:`t` into Sinusoidal Position Embedding then use mlps to create timestep embeddings
+
+        Args:
+            t (torch.Tensor): timestep as a tensor of shape :math:`(N, 1)`
+
+        Returns:
+            (torch.Tensor): embedding of shape :math:`(N, 1)`
+        """
+
         h = self.position_embedding(t)
         h = self.mlp(h)
         return h
+
+
+class SinusoidalPositionEmbeddings(nn.Module):
+    """Transformer position embedding
+
+    Args:
+        dim (int): dim
+    """
+
+    def __init__(self, dim):
+        super().__init__()
+        self.dim = dim
+
+    def forward(self, time):
+        """Encode time :math:`t` as a Sinusoidal Position Embedding
+
+        Args:
+            time (torch.Tensor): :math:`t`, a tensor of shape :math:`(N, 1)`
+
+        Returns:
+            (torch.Tensor): position embedding of shape :math:`(N, T)`
+        """
+
+        device = time.device
+        half_dim = self.dim // 2
+        embeddings = math.log(10000) / (half_dim - 1)
+        embeddings = torch.exp(torch.arange(half_dim, device=device) * -embeddings)
+        embeddings = time[:, None] * embeddings[None, :]
+        embeddings = torch.cat((embeddings.sin(), embeddings.cos()), dim=-1)
+        return embeddings
 
 
 class Block(nn.Module):
@@ -232,12 +257,91 @@ class Block(nn.Module):
         self.attentions = nn.ModuleList(attentions)
 
     def forward(self, x, t):
+        """Apply multiple `ResBlocks` with optional `Attention` at the end
+
+        Args:
+            x (torch.Tensor): :math:`x_t`, tensor of shape :math:`(N, C, H, W)`
+            t (int): :math:`t`
+
+        Returns:
+            x (torch.Tensor): tensor of shape :math:`(N, C, H, W)` where :math:`C` is `out_channels`
+        """
+
         for i in range(self.num_blocks - 1):
             x = self.resblocks[i](x, t)
             if self.use_attention:
                 x = self.attentions[i](x)
         x = self.resblocks[-1](x, t)
         return x
+
+
+class UpSample(nn.Module):
+    """Upsampling layer
+
+    Args:
+        dim (int): number of input and output channels
+        scale_factor (float): upsample scale
+    """
+
+    def __init__(self, dim, scale_factor):
+        super().__init__()
+
+        self.upsample = nn.Upsample(scale_factor=scale_factor)
+        self.conv = nn.Conv2d(dim, dim, 3, 1, 1)
+
+    def forward(self, x):
+        """Upsample by an arbitrary factor by upsampling with interpolation
+        followed by 3x3 convolutions with same input and output channels
+
+        Returns:
+            x
+        """
+        h = self.upsample(x)
+        h = self.conv(h)
+        return h
+
+
+class Attention(nn.Module):
+    r"""Multi Head Self Attention layer
+
+    Args:
+        dim (int): :math:`d_\text{model}`
+        groups (int): num groups in `nn.GroupNorm`
+    """
+
+    def __init__(self, dim, groups=8):
+        super().__init__()
+
+        self.norm = nn.GroupNorm(groups, dim)
+
+        self.scale = dim**-0.5
+        self.to_qkv = nn.Conv2d(dim, dim * 3, 1, bias=False)
+        self.to_out = nn.Conv2d(dim, dim, 1)
+
+    def forward(self, x):
+        """Multi Head Self Attention on images with prenorm and residual connections
+
+        Returns:
+            x
+        """
+        h, w = x.size()[2:]
+
+        x = self.norm(x)
+
+        qkv = self.to_qkv(x)
+
+        qkv = einops.rearrange(qkv, "b c h w -> b c (h w)")
+        query, key, value = qkv.chunk(3, dim=1)
+
+        score = einops.einsum(query * self.scale, key, "b c qhw, b c khw -> b qhw khw")
+
+        attention = F.softmax(score, dim=-1)
+
+        out = einops.einsum(attention, value, "b qhw khw, b c khw -> b c qhw")
+
+        out = einops.rearrange(out, "b c (h w) -> b c h w", h=h, w=w)
+
+        return self.to_out(out) + x
 
 
 class ResBlock(nn.Module):
@@ -300,6 +404,20 @@ class ResBlock(nn.Module):
         self._act = self.act
 
     def forward(self, x, t):
+        """ResBlock with time embeddings
+
+        ResBlock with two convolution layers with residual connections.
+        Adds time embedding to the first layer's output using an mlp to match dimensions.
+        Then normalization, activation , dropout is applied in that order.
+        The second convolutional layer is identical to the basic resblock.
+
+        Args:
+            x (torch.Tensor): :math:`x_t`, tensor of shape :math:`(N, C, H, W)`
+            t (int): :math:`t`
+
+        Returns:
+            x (torch.Tensor): tensor of shape :math:`(N, C, H, W)` where :math:`C` is `out_channels`
+        """
         h = self._first(x)
         h = h + einops.rearrange(self.mlp(t), "b c -> b c 1 1")
         h = self._first_norm_then_act(h)
@@ -311,10 +429,12 @@ class ResBlock(nn.Module):
 
     @property
     def norm(self):
+        """Returns copies of normalizaiton layers"""
         return nn.GroupNorm(self.groups, self.out_channels)
 
     @property
     def act(self):
+        """Returns copies of activation layers"""
         return nn.SiLU()
 
 
@@ -330,70 +450,12 @@ class DownSample(nn.Module):
         self.conv = nn.Conv2d(dim, dim, 3, 2, 1)
 
     def forward(self, x):
+        """Downsample by a factor of 2 using convolutions
+
+        Returns:
+            x
+        """
         return self.conv(x)
-
-
-class UpSample(nn.Module):
-    """Upsampling layer
-
-    Args:
-        dim (int): number of input and output channels
-        scale_factor (float): upsample scale
-    """
-
-    def __init__(self, dim, scale_factor):
-        super().__init__()
-
-        self.upsample = nn.Upsample(scale_factor=scale_factor)
-        self.conv = nn.Conv2d(dim, dim, 3, 1, 1)
-
-    def forward(self, x):
-        h = self.upsample(x)
-        h = self.conv(h)
-        return h
-
-
-class Attention(nn.Module):
-    r"""Multi Head Self Attention layer
-
-    Args:
-        dim (int): :math:`d_\text{model}`
-        groups (int): num groups in `nn.GroupNorm`
-        heads (int): number of heads
-    """
-
-    def __init__(self, dim, groups=8, heads=1):
-        super().__init__()
-
-        self.norm = nn.GroupNorm(groups, dim)
-
-        dim_head = dim // heads
-
-        self.scale = dim_head**-0.5
-        self.heads = heads
-        hidden_dim = dim_head * heads
-        self.to_qkv = nn.Conv2d(dim, hidden_dim * 3, 1, bias=False)
-        self.to_out = nn.Conv2d(hidden_dim, dim, 1)
-
-    def forward(self, x):
-        b, c, h, w = x.shape
-
-        x = self.norm(x)
-
-        qkv = self.to_qkv(x).chunk(3, dim=1)
-        q, k, v = map(
-            lambda t: einops.rearrange(t, "b (h c) x y -> b h c (x y)", h=self.heads),
-            qkv,
-        )
-        q = q * self.scale
-
-        sim = torch.einsum("b h d i, b h d j -> b h i j", q, k)
-        sim = sim - sim.amax(dim=-1, keepdim=True).detach()
-        attn = sim.softmax(dim=-1)
-
-        out = torch.einsum("b h i j, b h d j -> b h i d", attn, v)
-        out = einops.rearrange(out, "b h (x y) d -> b (h d) x y", x=h, y=w)
-        return self.to_out(out) + x
 
 
 def conv2d(

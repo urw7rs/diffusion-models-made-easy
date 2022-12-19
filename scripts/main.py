@@ -10,7 +10,7 @@ from dmme.lr_scheduler import WarmupLR
 from dmme.noise_schedules import linear_schedule
 
 
-def train(timesteps=1000, lr=2e-4, warmup=5000, max_steps=800_000):
+def train(timesteps=1000, lr=2e-4, clip_val=1.0, warmup=5000, max_steps=800_000):
     device = torch.device("cuda") if torch.cuda.is_available() else "cpu"
 
     model = UNet()
@@ -37,6 +37,9 @@ def train(timesteps=1000, lr=2e-4, warmup=5000, max_steps=800_000):
 
             optimizer.zero_grad()
             loss.backward()
+
+            torch.nn.utils.clip_grad_norm(sampler.parameters(), clip_val)
+
             optimizer.step()
             lr_scheduler.step()
 
