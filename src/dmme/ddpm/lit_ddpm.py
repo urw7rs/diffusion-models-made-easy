@@ -13,7 +13,6 @@ from dmme.common import denorm, make_history, set_default
 from dmme.lr_scheduler import WarmupLR
 
 from dmme.callbacks import EMA
-from pytorch_lightning.callbacks import LearningRateMonitor, ModelCheckpoint
 
 from .ddpm_sampler import DDPMSampler
 from .unet import UNet
