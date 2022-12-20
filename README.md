@@ -34,7 +34,7 @@ Install dependencies for docs
 pip install dmme[docs]
 ```
 
-## Training
+## Train Diffusion Models
 
 Train DDPM Using `LightningCLI` and `wandb` logger with mixed precision
 
