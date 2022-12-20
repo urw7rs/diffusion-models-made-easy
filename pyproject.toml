@@ -40,6 +40,9 @@ docs = [
 [project.urls]
 "Homepage" = "https://github.com/urw7rs/diffusion-models-made-easy"
 
+[project.scripts]
+dmme = "dmme.__main__:main"
+
 [tool.bumpver]
 current_version = "0.1.1"
 version_pattern = "MAJOR.MINOR.PATCH"
