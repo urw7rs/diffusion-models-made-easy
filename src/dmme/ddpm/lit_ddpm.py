@@ -1,4 +1,4 @@
-from typing import Tuple
+from typing import Tuple, Optional
 
 import torch
 from torch import nn
@@ -9,11 +9,14 @@ import pytorch_lightning as pl
 from torchmetrics.image.fid import FrechetInceptionDistance
 from torchmetrics.image.inception import InceptionScore
 
-from dmme.common import denorm, make_history
+from dmme.common import denorm, make_history, set_default
 from dmme.lr_scheduler import WarmupLR
 
 from dmme.callbacks import EMA
 from pytorch_lightning.callbacks import LearningRateMonitor, ModelCheckpoint
+
+from .ddpm_sampler import DDPMSampler
+from .unet import UNet
 
 
 class LitDDPM(pl.LightningModule):
@@ -32,7 +35,7 @@ class LitDDPM(pl.LightningModule):
 
     def __init__(
         self,
-        sampler: nn.Module,
+        sampler: Optional[nn.Module] = None,
         lr: float = 2e-4,
         warmup: int = 5000,
         imgsize: Tuple[int, int, int] = (3, 32, 32),
@@ -42,7 +45,9 @@ class LitDDPM(pl.LightningModule):
         super().__init__()
         self.save_hyperparameters(ignore="sampler")
 
-        self.sampler = sampler
+        self.sampler = set_default(
+            sampler, DDPMSampler(UNet(in_channels=3), timesteps=timesteps)
+        )
 
     def training_step(self, batch, batch_idx):
         """Compute loss using sampler"""

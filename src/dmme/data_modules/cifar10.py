@@ -1,9 +1,9 @@
-from typing import Callable, List
+from typing import Callable, List, Optional
 
 from torchvision import datasets
 import torchvision.transforms as TF
 
-from dmme.common import norm
+from dmme.common import norm, set_default
 
 from .dataset import Dataset
 
@@ -13,12 +13,12 @@ class CIFAR10(Dataset):
         self,
         data_dir: str = ".",
         batch_size: int = 128,
-        augs: List[Callable] = [TF.RandomHorizontalFlip()],
+        augs: Optional[List[Callable]] = None,
     ):
         super().__init__(batch_size)
 
         self.data_dir = data_dir
-        self.augs = augs
+        self.augs = set_default(augs, [TF.RandomHorizontalFlip()])
 
     def prepare_data(self):
         datasets.CIFAR10(root=self.data_dir, download=True)
