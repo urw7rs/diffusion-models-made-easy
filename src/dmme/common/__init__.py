@@ -10,4 +10,5 @@ __all__ = [
     "norm",
     "denorm",
     "make_history",
+    "set_default",
 ]
