@@ -1,15 +1,4 @@
-# Callbacks
-
-```{eval-rst}
-.. currentmodule:: dmme.callbacks
-
-.. autosummary::
-    :nosignatures:
-
-    EMA
-```
-
-## EMA
+# EMA Callback
 
 ```{eval-rst}
 .. currentmodule:: dmme.callbacks
