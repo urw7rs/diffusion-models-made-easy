@@ -12,6 +12,12 @@ trainer:
       init_args:
         save_last: true
     - class_path: pytorch_lightning.callbacks.LearningRateMonitor
+    - class_path: dmme.callbacks.GenerateImage
+      init_args:
+        imgsize:
+          - 3
+          - 32
+          - 32
   default_root_dir: null
   gradient_clip_val: 1.0
   gradient_clip_algorithm: null

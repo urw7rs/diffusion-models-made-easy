@@ -4,7 +4,7 @@ import torch.nn.functional as F
 
 import einops
 
-from dmme.common import gaussian, gaussian_like, uniform_int, denorm
+from dmme.common import gaussian_like, uniform_int
 
 
 class DDPMSampler(nn.Module):
@@ -35,6 +35,20 @@ class DDPMSampler(nn.Module):
 
         if beta is not None:
             self.register_alphas(beta)
+
+    def forward(self, x_t, t):
+        r"""Predicts the noise given :math:`x_t` and :math:`t`
+
+        Applies forward to the internal model
+
+        Expects :math:`x_t` to have shape :math:`(N, C, H, W)`
+
+        Args:
+            x_t (torch.Tensor): image
+            t (int): :math:`t` in :math:`\bold{x}_t`
+        """
+
+        return self.model(x_t, t)
 
     def forward_process(self, x_0, t, noise=None):
         r"""Forward Diffusion Process
@@ -189,80 +203,25 @@ class DDPMSampler(nn.Module):
         return loss
 
     @torch.inference_mode()
-    def sample(self, x_shape, start=0, end=None, step=1, save_last=True, device=None):
+    def sample(self, x_t, t, noise=None):
         r"""Generate Samples
 
-        Iteratively sample from :math:`p_\theta(x_t,t)`
-
-        .. code-block:: python
-
-            x = gaussian()
-            for t in range(T, 0, -1):
-                z = gaussian() if t > 1 else 0
-                x = reverse_process(x, t, z)
-            return x
-
-        start, end, step parameters specify which steps to return
+        Iteratively sample from :math:`p_\theta(x_{t-1}|x_t)` starting from :math:`x_T`
 
         Args:
-            x_shape (Tuple[int, int, int]): image shape
-            start (int): start t
-            end (int): end t
-            step (int): step
-            save_last (bool): whether to save last sample
-            device (torch.device): device
+            x_t (Tuple[int, int, int]): image shape
+            t (int): timestep :math:`t` to sample from
 
         Returns:
-            (List[torch.Tensor]): denoised samples
+            (torch.Tensor): sample from :math:`p_\theta(x_{t-1}|x_t)` starting from :math:`x_T`
         """
 
-        history = []
+        if t == 1:
+            x_t = self.reverse_process(x_t, 1, noise=0)
+        else:
+            x_t = self.reverse_process(x_t, t, noise)
 
-        def save(x):
-            history.append(denorm(x))
-
-        def format(n):
-            if n < 0:
-                n %= self.timesteps
-                n += 1
-            elif n is None:
-                n = self.timesteps + 1
-            return n
-
-        start = format(start)
-        end = format(end)
-
-        x_t = gaussian(x_shape, device=device)
-
-        if self.timesteps == start:
-            save(x_t)
-
-        for t in range(self.timesteps, 1, -1):
-            x_t = self.reverse_process(x_t, t)
-
-            if end > t - 1 >= start:
-                if (t - 1 - start) % step == 0:
-                    save(x_t)
-
-        x_0 = self.reverse_process(x_t, 1, noise=0)
-        if save_last or end > 0 >= start:
-            save(x_0)
-
-        return history
-
-    def forward(self, x, t):
-        r"""Predicts the noise given :math:`x_t` and :math:`t`
-
-        Applies forward to the internal model
-
-        Expects :math:`x_t` to have shape :math:`(N, C, H, W)`
-
-        Args:
-            x (torch.Tensor): image
-            t (int): :math:`t` in :math:`\bold{x}_t`
-        """
-
-        return self.model(x, t)
+        return x_t
 
 
 def linear_schedule(timesteps, start=0.0001, end=0.02):

@@ -7,15 +7,14 @@ from dmme import CIFAR10
 
 from dmme.ddpm import UNet, DDPMSampler
 from dmme.lr_scheduler import WarmupLR
-from dmme.noise_schedules import linear_schedule
 
 
 def train(timesteps=1000, lr=2e-4, clip_val=1.0, warmup=5000, max_steps=800_000):
     device = torch.device("cuda") if torch.cuda.is_available() else "cpu"
 
     model = UNet()
-    beta = linear_schedule(timesteps=timesteps)
-    sampler = DDPMSampler(model, timesteps=timesteps, beta=beta)
+
+    sampler = DDPMSampler(model, timesteps=timesteps)
     sampler = sampler.to(device)
 
     cifar10 = CIFAR10()
@@ -38,7 +37,7 @@ def train(timesteps=1000, lr=2e-4, clip_val=1.0, warmup=5000, max_steps=800_000)
             optimizer.zero_grad()
             loss.backward()
 
-            torch.nn.utils.clip_grad_norm(sampler.parameters(), clip_val)
+            torch.nn.utils.clip_grad_norm_(sampler.parameters(), clip_val)
 
             optimizer.step()
             lr_scheduler.step()

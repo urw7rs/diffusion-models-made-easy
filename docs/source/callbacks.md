@@ -1,8 +1,19 @@
-# EMA Callback
+# Callbacks
 
 ```{eval-rst}
 .. currentmodule:: dmme.callbacks
 
-.. autoclass:: EMA
-    :members:
+.. autosummary::
+    :nosignatures:
+
+    EMA
+    GenerateImage
+```
+
+```{toctree}
+:caption: 'Callbacks:'
+:maxdepth: 2
+
+callbacks/ema
+callbacks/generate
 ```

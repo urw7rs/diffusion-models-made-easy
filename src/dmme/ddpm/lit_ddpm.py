@@ -1,19 +1,19 @@
 from typing import Tuple
 
 import torch
-from torch import nn
 from torch.optim import Adam
 
 import pytorch_lightning as pl
 
+from dmme.ddpm.ddpm_sampler import DDPMSampler
+
 from torchmetrics.image.fid import FrechetInceptionDistance
 from torchmetrics.image.inception import InceptionScore
 
-from dmme.common import denorm, make_history
+from dmme.common import denorm, gaussian_like
 from dmme.lr_scheduler import WarmupLR
 
 from dmme.callbacks import EMA
-from pytorch_lightning.callbacks import LearningRateMonitor, ModelCheckpoint
 
 
 class LitDDPM(pl.LightningModule):
@@ -32,7 +32,7 @@ class LitDDPM(pl.LightningModule):
 
     def __init__(
         self,
-        sampler: nn.Module,
+        sampler: DDPMSampler,
         lr: float = 2e-4,
         warmup: int = 5000,
         imgsize: Tuple[int, int, int] = (3, 32, 32),
@@ -44,6 +44,32 @@ class LitDDPM(pl.LightningModule):
 
         self.sampler = sampler
 
+    def forward(self, x_t, start_t, stop_t=0, step_t=-1, noise=None):
+        r"""Iteratively sample from :math:`p_\theta(x_{t-1}|x_t)` starting with :math:`x_t` with start, stop step specified from arguments
+
+        Args:
+            x_t (torch.Tensor): image of shape :math:`(N, C, H, W)`
+            start_t (int): starting :math:`t` to sample from
+            stop_t (int): stops sampling when reached
+            steps_t (int): step sizes for sequence
+            noise (torch.Tensor): noise to use for sampling, if `None` samples new noise
+
+        Returns:
+            (torch.Tensor): generated samples
+        """
+
+        if start_t is None:
+            start_t = self.sampler.timesteps
+
+        if noise is None:
+            num_steps = abs(stop_t - start_t) // abs(step_t) + 1
+            noise = [None] * self.sampler.timesteps
+
+        for t in range(start_t, stop_t, step_t):
+            x_t = self.sampler.sample(x_t, t, noise[t - 1])
+
+        return x_t
+
     def training_step(self, batch, batch_idx):
         """Compute loss using sampler"""
         x_0, _ = batch
@@ -52,26 +78,23 @@ class LitDDPM(pl.LightningModule):
         self.log("train/loss", loss)
         return loss
 
-    def training_epoch_end(self, outputs):
-        """Generate samples at the end of the epoch"""
-        self.sample_and_log(num_samples=16, length=16)
-
     def test_step(self, batch, batch_idx):
         """Generate samples for evaluation"""
         x, _ = batch
-        x = denorm(x)
 
-        self.fid.update(x, real=True)
+        self.fid.update(denorm(x), real=True)
 
-        batch_size = x.size(0)
-        history = self.sample_and_log(num_samples=batch_size, length=1)
+        x_T = gaussian_like(x)
+        x_0 = self(x_T)
 
-        final_img = history[-1]
-        self.fid.update(final_img, real=False)
-        self.inception.update(final_img)
+        fake_x = denorm(x_0)
+
+        self.fid.update(fake_x, real=False)
+        self.inception.update(fake_x)
 
     def test_epoch_end(self, outputs):
         """Compute metrics and log at the end of the epoch"""
+
         fid_score = self.fid.compute()
         kl_mean, _ = self.inception.compute()
         inception_score = torch.exp(kl_mean)
@@ -105,33 +128,3 @@ class LitDDPM(pl.LightningModule):
         ema_callback = EMA(decay=self.hparams.decay)
 
         return ema_callback
-
-    def sample_and_log(self, num_samples=1, length=1):
-        """Sample data and log to logger
-
-        Args:
-            num_samples (int): number of samples
-            length (int): length of history to save in :math:`T` timesteps
-        """
-        if length == 1:
-            start = end = 0
-            step = 1
-        elif length > 2:
-            start = 0
-            end = self.sampler.timesteps + 1
-            step = (self.sampler.timesteps - 1) // (length - 1)
-
-        history = self.sampler.sample(
-            (num_samples, *self.hparams.imgsize),
-            start,
-            end,
-            step,
-            save_last=True,
-            device=self.device,
-        )
-
-        grid = make_history(history)
-
-        self.logger.log_image("samples", [grid])
-
-        return history
