@@ -4,7 +4,7 @@ import torch.nn.functional as F
 
 import einops
 
-from dmme.common import gaussian, gaussian_like, uniform_int
+from dmme.common import gaussian_like, uniform_int
 
 
 class DDPMSampler(nn.Module):
