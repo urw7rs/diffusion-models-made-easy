@@ -1,7 +1,5 @@
 from typing import Tuple
 
-import math
-
 import torch
 from torch.optim import Adam
 
@@ -12,7 +10,7 @@ from dmme.ddpm.ddpm_sampler import DDPMSampler
 from torchmetrics.image.fid import FrechetInceptionDistance
 from torchmetrics.image.inception import InceptionScore
 
-from dmme.common import denorm, make_history, gaussian_like
+from dmme.common import denorm, gaussian_like
 from dmme.lr_scheduler import WarmupLR
 
 from dmme.callbacks import EMA
@@ -65,10 +63,10 @@ class LitDDPM(pl.LightningModule):
 
         if noise is None:
             num_steps = abs(stop_t - start_t) // abs(step_t) + 1
-            noise = [None] * num_steps
+            noise = [None] * self.sampler.timesteps
 
         for t in range(start_t, stop_t, step_t):
-            x_t = self.sampler.sample(x_t, t, noise[t])
+            x_t = self.sampler.sample(x_t, t, noise[t - 1])
 
         return x_t
 
