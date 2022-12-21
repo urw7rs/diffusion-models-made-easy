@@ -1,6 +1,7 @@
-from typing import Tuple
+from typing import Tuple, Optional
 
 import torch
+from torch import nn
 from torch.optim import Adam
 
 import pytorch_lightning as pl
@@ -10,10 +11,13 @@ from dmme.ddpm.ddpm_sampler import DDPMSampler
 from torchmetrics.image.fid import FrechetInceptionDistance
 from torchmetrics.image.inception import InceptionScore
 
-from dmme.common import denorm, gaussian_like
+from dmme.common import denorm, set_default
 from dmme.lr_scheduler import WarmupLR
 
 from dmme.callbacks import EMA
+
+from .ddpm_sampler import DDPMSampler
+from .unet import UNet
 
 
 class LitDDPM(pl.LightningModule):
@@ -32,7 +36,7 @@ class LitDDPM(pl.LightningModule):
 
     def __init__(
         self,
-        sampler: DDPMSampler,
+        sampler: Optional[nn.Module] = None,
         lr: float = 2e-4,
         warmup: int = 5000,
         imgsize: Tuple[int, int, int] = (3, 32, 32),
@@ -42,7 +46,9 @@ class LitDDPM(pl.LightningModule):
         super().__init__()
         self.save_hyperparameters(ignore="sampler")
 
-        self.sampler = sampler
+        self.sampler = set_default(
+            sampler, DDPMSampler(UNet(in_channels=3), timesteps=timesteps)
+        )
 
     def forward(self, x_t, start_t, stop_t=0, step_t=-1, noise=None):
         r"""Iteratively sample from :math:`p_\theta(x_{t-1}|x_t)` starting with :math:`x_t` with start, stop step specified from arguments
