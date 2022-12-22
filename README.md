@@ -36,13 +36,36 @@ pip install dmme[docs]
 
 ## Train Diffusion Models
 
-Train DDPM Using `LightningCLI` and `wandb` logger with mixed precision
+### Train DDPM Using built in `LightningCLI`:
 
 ```bash
-python scripts/trainer.py fit --config configs/ddpm/cifar10.yaml
+dmme.trainer fit --seed_everything 1337 \
+    --trainer.accelerator gpu --trainer.precision 16 --trainer.benchmark true \
+    --trainer.logger=pytorch_lightning.loggers.WandbLogger \
+    --trainer.logger.project="CIFAR10_Image_Generation" \
+    --trainer.logger.name="DDPM" \
+    --trainer.gradient_clip_val=1.0 \
+    --trainer.max_steps 800_000 \
+    --model LitDDPM --data CIFAR10
 ```
 
-Train DDPM from python using pytorch-lightning
+alternatively using a config file:
+
+```bash
+dmme.trainer fit --config ddpm_cifar10.yaml
+```
+
+you can print default configs for each model and data using
+
+```bash
+dmme.trainer fit --model LitDDPM --data CIFAR10 --print_config > config.yaml
+```
+
+this will save default configs to `config.yaml`
+
+### Train DDPM from python
+
+using pytorch-lightning
 
 ```python
 from pytorch_lightning import Trainer
