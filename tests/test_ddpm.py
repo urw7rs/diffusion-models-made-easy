@@ -58,7 +58,7 @@ class DummyModel(nn.Module):
         super().__init__()
         self.conv = nn.Conv2d(3, 3, 1)
 
-    def forward(self, x, t):
+    def forward(self, x, *args, **kwargs):
         return self.conv(x)
 
 
