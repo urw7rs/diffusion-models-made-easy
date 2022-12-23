@@ -3,7 +3,7 @@ from typing import Callable, List, Optional
 from torchvision import datasets
 import torchvision.transforms as TF
 
-from dmme.common import norm, set_default
+from dmme.common import norm
 
 from .dataset import Dataset
 
@@ -28,7 +28,10 @@ class CIFAR10(Dataset):
         super().__init__(batch_size)
 
         self.data_dir = data_dir
-        self.augs = set_default(augs, [TF.RandomHorizontalFlip()])
+
+        if augs is None:
+            augs = [TF.RandomHorizontalFlip()]
+        self.augs = augs
 
     def prepare_data(self):
         """Download dataset"""

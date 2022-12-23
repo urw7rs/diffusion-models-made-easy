@@ -1,3 +1,7 @@
+from tqdm import tqdm
+
+import torch
+
 import pytorch_lightning as pl
 
 from dmme.common import make_history, gaussian, denorm
@@ -57,6 +61,7 @@ class GenerateImage(pl.Callback):
         if isinstance(logger, pl.loggers.TensorBoardLogger):
             experiment.add_image("generated_images", grid, pl_module.global_step)
 
+    @torch.inference_mode()
     def generate_img(self, pl_module):
         pl_module.eval()
 
@@ -73,14 +78,17 @@ class GenerateImage(pl.Callback):
 
         t = timesteps
         save_t = t - step
-        while t > 0:
-            while t > save_t:
-                x_t = pl_module(x_t, t, t - 1)
-                t -= 1
 
-            denoising_sequence.append(denorm(x_t.clone().detach()))
+        prog_bar = tqdm(range(timesteps, 0, -1))
+        for t in prog_bar:
+            x_t = pl_module(x_t, t)
 
-            save_t -= step
+            if t == save_t:
+                denoising_sequence.append(denorm(x_t.clone().detach()))
+
+                save_t -= step
+
+        prog_bar.clear()
 
         pl_module.train()
 

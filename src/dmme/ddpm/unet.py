@@ -118,7 +118,7 @@ class UNet(nn.Module):
 
         Args:
             x (torch.Tensor): :math:`x_t`, tensor of shape :math:`(N, C, H, W)`
-            t (int): :math:`t`
+            t (torch.Tensor): :math:`t`, tensor of shape :math:`(N,)`
 
         Returns:
             (torch.Tensor): :math:`\epsilon_\theta(x_t,t)` predicted noise from image, a tensor of shape :math:`(N, C, H, W)`
