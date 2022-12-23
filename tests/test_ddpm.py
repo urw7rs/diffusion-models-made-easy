@@ -3,16 +3,13 @@ from torch import nn
 
 from einops import rearrange
 
-
-from dmme.ddpm import ForwardProcess, linear_schedule
+from dmme.ddpm import DDPMSampler, ForwardProcess, ReverseProcess, linear_schedule
 from dmme.ddpm import alpha_from_beta, alpha_bar_from_alpha, pad
 
 from dmme.common import gaussian_like
 
 from pytorch_lightning import Trainer
-
 from dmme.ddpm.lit_ddpm import LitDDPM
-
 from dmme import CIFAR10
 
 
@@ -50,6 +47,24 @@ def test_forward_process():
     noise = gaussian_like(x_0)
 
     x_t = forward_process(x_0, t, noise)
+
+
+def test_reverse_process():
+    reverse_process = ReverseProcess.build(8)
+
+    x_0 = torch.randn(4, 3, 32, 32)
+    t = torch.randint(0, 8, size=(4,))
+    noise = gaussian_like(x_0)
+
+    x_t = reverse_process(x_0, t, torch.randn_like(noise), noise)
+
+
+def test_ddpmsampler():
+    sampler = DDPMSampler(ReverseProcess.build(8))
+
+    x_0 = torch.randn(4, 3, 32, 32)
+    noise = gaussian_like(x_0)
+    x_t = sampler(x_0, 8, torch.randn_like(noise), noise)
 
 
 class DummyModel(nn.Module):
