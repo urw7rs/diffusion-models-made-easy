@@ -12,7 +12,6 @@ from dmme.common import gaussian_like
 from pytorch_lightning import Trainer
 
 from dmme.ddpm.lit_ddpm import LitDDPM
-from dmme.ddpm.unet import UNet
 
 from dmme import CIFAR10
 
