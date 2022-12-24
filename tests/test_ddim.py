@@ -25,7 +25,7 @@ def test_reverse_process(tau_schedule, eta):
     reverse_process = DDIMReverseProcess(beta, tau, eta)
 
     x_0 = torch.randn(4, 3, 32, 32)
-    t = torch.randint(0, 5, size=(4,))
+    t = torch.randint(1, 5, size=(4,))
     noise = gaussian_like(x_0)
 
     x_t = reverse_process(x_0, t, torch.randn_like(noise), noise)
