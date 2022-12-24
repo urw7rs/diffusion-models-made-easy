@@ -4,33 +4,23 @@ from torch import nn, Tensor
 from einops import rearrange
 
 
-class Process(nn.Module):
+class ForwardProcess(nn.Module):
     """Base class for `ForwardProcess` and `ReverseProcess`, Use `__init__()` for fine grained control, `build()` for simplicity"""
 
-    def __init__(self) -> None:
-        super().__init__()
-
-    def forward(self, *args, **kwargs):
-        """forward for `nn.Module`"""
-        raise NotImplementedError
-
-    @staticmethod
-    def build(*args, **kwargs):
-        """Easy to use constructor"""
-        raise NotImplementedError
-
-
-class ForwardProcess(Process):
+    beta: Tensor
+    alpha: Tensor
     alpha_bar: Tensor
 
     def __init__(self, beta: Tensor) -> None:
         super().__init__()
 
-        beta = rearrange(beta, "t -> t 1 1 1")
+        alpha = 1 - beta
+        # alpha[0] = 1 so no problems here
+        alpha_bar = torch.cumprod(alpha, dim=0)
 
-        alpha = alpha_from_beta(beta)
-        alpha_bar = alpha_bar_from_alpha(alpha)
-        self.register_buffer("alpha_bar", alpha_bar)
+        self.register_buffer("beta", beta, persistent=False)
+        self.register_buffer("alpha", alpha, persistent=False)
+        self.register_buffer("alpha_bar", alpha_bar, persistent=False)
 
     def forward(self, x_0: Tensor, t: Tensor, noise: Tensor):
         r"""Forward Diffusion Process
@@ -57,33 +47,16 @@ class ForwardProcess(Process):
 
         return x_t
 
-    @staticmethod
-    def build(timesteps):
-        beta = linear_schedule(timesteps)
-        return ForwardProcess(beta)
 
-
-class ReverseProcess(Process):
-    beta: Tensor
-    alpha: Tensor
-    alpha_bar: Tensor
+class ReverseProcess(ForwardProcess):
     sigma: Tensor
 
     def __init__(self, beta: Tensor, sigma: Tensor) -> None:
-        super().__init__()
+        super().__init__(beta)
 
-        beta = rearrange(beta, "t -> t 1 1 1")
-        sigma = rearrange(sigma, "t -> t 1 1 1")
+        self.register_buffer("sigma", sigma, persistent=False)
 
-        alpha = alpha_from_beta(beta)
-        alpha_bar = alpha_bar_from_alpha(alpha)
-
-        self.register_buffer("beta", beta)
-        self.register_buffer("alpha", alpha)
-        self.register_buffer("alpha_bar", alpha_bar)
-        self.register_buffer("sigma", sigma)
-
-    def forward(self, x_t, t, noise_estimate, noise):
+    def forward(self, model, x_t, t, noise):
         r"""Reverse Denoising Process
 
         Samples :math:`x_{t-1}` from
@@ -115,18 +88,16 @@ class ReverseProcess(Process):
         alpha_bar_t = self.alpha_bar[t]
         sigma_t = self.sigma[t]
 
+        noise_estimate = model(x_t, t)
+
         x_t_minus_one = (
-            x_t / torch.sqrt(alpha_t)
-            - (beta_t / torch.sqrt(alpha_t * (1 - alpha_bar_t)) * noise_estimate)
+            1
+            / torch.sqrt(alpha_t)
+            * (x_t - beta_t / torch.sqrt(1 - alpha_bar_t) * noise_estimate)
             + sigma_t * noise
         )
 
         return x_t_minus_one
-
-    @staticmethod
-    def build(timesteps):
-        beta = linear_schedule(timesteps)
-        return ReverseProcess(beta=beta, sigma=beta)
 
 
 class DDPMSampler(nn.Module):
@@ -142,15 +113,14 @@ class DDPMSampler(nn.Module):
         timesteps (int): diffusion timesteps
     """
 
-    def __init__(self, reverse_process: ReverseProcess):
+    def __init__(self, timesteps: int = 1000, start: float = 0.0001, end: float = 0.02):
         super().__init__()
 
-        self.reverse_process = reverse_process
+        beta = linear_schedule(timesteps, start, end)
+        beta = rearrange(beta, "t -> t 1 1 1")
+        self.reverse_process = ReverseProcess(beta, sigma=torch.sqrt(beta))
 
-        t = torch.arange(0, self.reverse_process.beta.size(0) + 1)
-        self.register_buffer("t", t)
-
-    def forward(self, x_t, t, noise_estimate, noise):
+    def forward(self, model, x_t, t, noise):
         r"""Generate Samples
 
         Iteratively sample from :math:`p_\theta(x_{t-1}|x_t)` starting from :math:`x_T`
@@ -164,30 +134,11 @@ class DDPMSampler(nn.Module):
             (torch.Tensor): sample from :math:`p_\theta(x_{t-1}|x_t)` starting from :math:`x_T`
         """
 
-        if t == 1:
-            x_t = self.reverse_process(x_t, t, noise_estimate, 0)
-        else:
-            x_t = self.reverse_process(x_t, t, noise_estimate, noise)
+        (idx,) = torch.where(t == 1)
+        noise[idx] = 0
 
+        x_t = self.reverse_process(model, x_t, t, noise)
         return x_t
-
-
-def alpha_from_beta(beta: Tensor) -> Tensor:
-    r"""returns alpha from beta
-
-    :math:`\alpha_t = 1 - \beta_t`
-    """
-    return 1 - beta
-
-
-def alpha_bar_from_alpha(alpha: Tensor) -> Tensor:
-    r"""returns alpha_bar from alpha
-
-    :math:`\bar\alpha_t = \prod_{s=1}^t\alpha_s`
-    """
-
-    alpha_bar = pad(torch.cumprod(alpha[1:], dim=0))
-    return alpha_bar
 
 
 def pad(x: Tensor, value: float = 0) -> Tensor:

@@ -6,6 +6,8 @@ import torch
 from torch import Tensor, nn
 from torch.optim import Adam
 
+from einops import rearrange
+
 import pytorch_lightning as pl
 
 from torchmetrics.image.fid import FrechetInceptionDistance
@@ -16,7 +18,7 @@ from dmme.callbacks import EMA
 
 from dmme.common import denorm, gaussian_like, uniform_int
 
-from .ddpm import DDPMSampler, ForwardProcess, ReverseProcess
+from .ddpm import DDPMSampler, ForwardProcess, linear_schedule
 from .loss import SimpleLoss
 from .unet import UNet
 
@@ -35,11 +37,9 @@ class LitDDPM(pl.LightningModule):
         decay (float): EMA decay value
     """
 
-    t: Tensor
-
     def __init__(
         self,
-        model: Optional[nn.Module] = None,
+        model: nn.Module,
         lr: float = 2e-4,
         warmup: int = 5000,
         imgsize: Tuple[int, int, int] = (3, 32, 32),
@@ -47,24 +47,26 @@ class LitDDPM(pl.LightningModule):
         decay: float = 0.9999,
     ):
         super().__init__()
-        self.save_hyperparameters(
-            ignore=["model", "forward_process", "reverse_process", "sampler", "loss"]
-        )
+        self.save_hyperparameters(ignore=["model"])
 
         if model is None:
             model = UNet()
 
         self.model = model
 
-        self.forward_process = ForwardProcess.build(timesteps)
-
-        reverse_process = ReverseProcess.build(timesteps)
-        sampler = DDPMSampler(reverse_process)
-        self.sampler = sampler
+        beta = linear_schedule(timesteps)
+        beta = rearrange(beta, "t -> t 1 1 1")
+        self.forward_process = ForwardProcess(beta)
+        self.sampler = DDPMSampler(timesteps=timesteps)
 
         self.loss = SimpleLoss()
 
-        self.register_buffer("t", torch.arange(0, timesteps + 1)[:, None])
+        self.fid = FrechetInceptionDistance(
+            normalize=True,
+            reset_real_features=False,
+        )
+
+        self.inception = InceptionScore(normalize=True)
 
     def forward(self, x_t: Tensor, t: int, noise: Optional[Tensor] = None):
         r"""Iteratively sample from :math:`p_\theta(x_{t-1}|x_t)` starting with :math:`x_t` with start, stop step specified from arguments
@@ -83,7 +85,9 @@ class LitDDPM(pl.LightningModule):
         if noise is None:
             noise = gaussian_like(x_t)
 
-        x_t = self.sampler(x_t, self.t[t], self.model(x_t, self.t[t]), noise)
+        timestep = torch.tensor([t], device=x_t.device)
+
+        x_t = self.sampler(self.model, x_t, timestep, noise)
 
         return x_t
 
@@ -109,26 +113,29 @@ class LitDDPM(pl.LightningModule):
 
     def test_step(self, batch, batch_idx):
         """Generate samples for evaluation"""
+
         x: Tensor = batch[0]
 
         self.fid.update(denorm(x), real=True)
 
         x_t: Tensor = gaussian_like(x)
 
-        noise = [None]
-        for _ in range(self.hparams.timesteps, 0, -1):
-            noise.append(gaussian_like(x))
-
-        prog_bar = tqdm(range(self.hparams.timesteps, 0, -1))
-        for t in prog_bar:
-            x_t = self(x_t, t, noise[t])
-
-        prog_bar.clear()
+        x_t = self.generate(x_t)
 
         fake_x: Tensor = denorm(x_t)
 
         self.fid.update(fake_x, real=False)
         self.inception.update(fake_x)
+
+    def generate(self, x_t):
+        noise = [None]
+        for _ in range(self.hparams.timesteps, 0, -1):
+            noise.append(gaussian_like(x_t))
+
+        for t in tqdm(range(self.hparams.timesteps, 0, -1), leave=False):
+            x_t = self(x_t, t, noise[t])
+
+        return x_t
 
     def test_epoch_end(self, outputs):
         """Compute metrics and log at the end of the epoch"""
@@ -152,14 +159,6 @@ class LitDDPM(pl.LightningModule):
 
     def setup(self, stage: str):
         """Prepare metrics for test stage"""
-
-        if stage == "test":
-            self.fid = FrechetInceptionDistance(
-                normalize=True,
-                reset_real_features=False,
-            )
-
-            self.inception = InceptionScore(normalize=True)
 
     def configure_callbacks(self):
         """Configure EMA callback, will override any other EMA callback"""

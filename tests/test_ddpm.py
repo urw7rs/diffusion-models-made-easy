@@ -3,14 +3,18 @@ from torch import nn
 
 from einops import rearrange
 
-from dmme.ddpm import DDPMSampler, ForwardProcess, ReverseProcess, linear_schedule
-from dmme.ddpm import alpha_from_beta, alpha_bar_from_alpha, pad
+from dmme.ddpm import (
+    DDPMSampler,
+    ForwardProcess,
+    ReverseProcess,
+    linear_schedule,
+)
+from dmme.ddpm import pad
 
 from dmme.common import gaussian_like
 
 from pytorch_lightning import Trainer
-from dmme.ddpm.lit_ddpm import LitDDPM
-from dmme import CIFAR10
+from dmme import LitDDPM, CIFAR10
 
 
 def test_pad():
@@ -26,45 +30,38 @@ def test_linear_schedule():
     assert list(beta.size()) == [9]
 
 
-def test_alpha_from_beta():
-    beta = linear_schedule(8)
-    alpha = alpha_from_beta(beta)
-    assert list(alpha.size()) == [9]
-
-
-def test_alpha_bar_from_beta():
-    beta = rearrange(linear_schedule(8), "t -> t 1 1 1")
-    alpha = alpha_from_beta(beta)
-    alpha_bar = alpha_bar_from_alpha(alpha)
-    assert list(alpha_bar.size()) == [9, 1, 1, 1]
-
-
 def test_forward_process():
-    forward_process = ForwardProcess.build(8)
+    beta = linear_schedule(8)
+    beta = rearrange(beta, "t -> t 1 1 1")
+    forward_process = ForwardProcess(beta)
 
     x_0 = torch.randn(4, 3, 32, 32)
-    t = torch.randint(0, 8, size=(4,))
+    t = torch.randint(1, 8, size=(4,))
     noise = gaussian_like(x_0)
 
     x_t = forward_process(x_0, t, noise)
 
 
 def test_reverse_process():
-    reverse_process = ReverseProcess.build(8)
+    beta = linear_schedule(8)
+    beta = rearrange(beta, "t -> t 1 1 1")
+    reverse_process = ReverseProcess(beta, sigma=beta)
 
     x_0 = torch.randn(4, 3, 32, 32)
-    t = torch.randint(0, 8, size=(4,))
+    t = torch.randint(1, 8, size=(4,))
     noise = gaussian_like(x_0)
 
     x_t = reverse_process(x_0, t, torch.randn_like(noise), noise)
 
 
 def test_ddpmsampler():
-    sampler = DDPMSampler(ReverseProcess.build(8))
+    sampler = DDPMSampler(timesteps=8)
 
-    x_0 = torch.randn(4, 3, 32, 32)
-    noise = gaussian_like(x_0)
-    x_t = sampler(x_0, 8, torch.randn_like(noise), noise)
+    x_t = torch.randn(4, 3, 32, 32)
+    noise = gaussian_like(x_t)
+
+    timestep = torch.tensor([1, 2, 3, 8], device=x_t.device)
+    x_t = sampler(x_t, timestep, torch.randn_like(noise), noise)
 
 
 class DummyModel(nn.Module):

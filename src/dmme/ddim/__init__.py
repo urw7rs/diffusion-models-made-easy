@@ -1,3 +1,4 @@
-from .ddim_sampler import DDIMSampler
+from .ddim import DDIMReverseProcess, DDIMSampler
+from .lit_ddim import LitDDIM
 
-__all__ = ["DDIMSampler"]
+__all__ = ["DDIMReverseProcess", "DDIMSampler"]
