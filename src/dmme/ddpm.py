@@ -1,3 +1,4 @@
+import functools
 from typing import Tuple, Optional
 
 import math
@@ -310,94 +311,90 @@ class UNet(nn.Module):
         drop_rate (float): drop_rate in `ResBlock`
     """
 
-    def __init__(
-        self,
-        in_channels=3,
-        pos_dim=128,
-        emb_dim=512,
-        num_blocks=2,
-        channels=(128, 256, 256, 256),
-        attn_depth=(2,),
-        groups=32,
-        drop_rate=0.1,
-    ):
+    def __init__(self, in_channels=3, groups=32, drop_rate=0.1):
         super().__init__()
 
-        self.depth = len(channels) - 1
-        self.num_blocks = num_blocks
+        emb_dim = 512
 
         self.time_emb = nn.Sequential(
-            SinusoidalPositionEmbeddings(pos_dim),
-            nn.Linear(pos_dim, emb_dim),
+            SinusoidalPositionEmbeddings(128),
+            nn.Linear(128, emb_dim),
             nn.SiLU(),
             nn.Linear(emb_dim, emb_dim),
         )
 
-        self.pos_dim = pos_dim
+        self.input_conv = nn.Conv2d(in_channels, 128, 3, 1, 1)
+        self.output_conv = conv3x3(128, in_channels, 32, drop_rate=0.0)
 
-        self.input_conv = nn.Conv2d(in_channels, channels[0], 3, 1, 1)
-        self.output_conv = conv3x3(channels[0], in_channels, groups, drop_rate=0.0)
+        def resblock(c_in, c_out, attention=False):
+            return ResBlock(
+                c_in,
+                c_out,
+                emb_dim=emb_dim,
+                groups=32,
+                drop_rate=drop_rate,
+                attention=attention,
+            )
 
-        output_dims = channels[1:]
-        input_dims = channels[:-1]
+        def downsample(dim):
+            return nn.Conv2d(dim, dim, 3, 2, 1)
 
-        down_blocks = []
-        down = []
-
-        for i, (c_in, c_out) in enumerate(zip(input_dims, output_dims)):
-            attention = i + 1 == attn_depth
-
-            layers = []
-            layers.append(ResBlock(c_in, c_out, emb_dim, groups, drop_rate, attention))
-
-            for _ in range(num_blocks - 1):
-                layers.append(
-                    ResBlock(c_out, c_out, emb_dim, groups, drop_rate, attention)
-                )
-
-            down_blocks.extend(layers)
-            if i != self.depth - 1:
-                down.append(nn.Conv2d(c_out, c_out, 3, 2, 1))
-
-        self.down_blocks = nn.ModuleList(down_blocks)
-        self.down = nn.ModuleList(down)
-
-        dim = dim = channels[-1]
-        self.middle = nn.ModuleList(
+        self.down = nn.ModuleList(
             [
-                ResBlock(dim, dim, emb_dim, groups, drop_rate, attention=True),
-                ResBlock(dim, dim, emb_dim, groups, drop_rate, attention=False),
+                # 32 x 32
+                resblock(128, 256),
+                resblock(256, 256),
+                downsample(256),
+                # 16 x 16
+                resblock(256, 256, attention=True),
+                resblock(256, 256, attention=True),
+                downsample(256),
+                # 8 x 8
+                resblock(256, 256),
+                resblock(256, 256),
+                downsample(256),
+                # 4 x 4
+                resblock(256, 256),
+                resblock(256, 256),
             ]
         )
 
-        up_blocks = []
-        up = []
+        self.middle = nn.ModuleList(
+            [
+                resblock(256, 256, attention=True),
+                resblock(256, 256),
+            ]
+        )
 
-        for i, (c_in, c_out) in enumerate(zip(input_dims[::-1], output_dims[::-1])):
-            attention = i + 1 == attn_depth
-
-            layers = []
-            for _ in range(num_blocks - 1):
-                layers.append(
-                    ResBlock(2 * c_out, c_out, emb_dim, groups, drop_rate, attention)
-                )
-            layers.append(
-                ResBlock(2 * c_out, c_in, emb_dim, groups, drop_rate, attention)
-            )
-            layers.append(
-                ResBlock(2 * c_in, c_in, emb_dim, groups, drop_rate, attention)
+        def upsample(dim):
+            return nn.Sequential(
+                nn.Upsample(scale_factor=2.0),
+                nn.Conv2d(dim, dim, 3, 1, 1),
             )
 
-            up_blocks.extend(layers)
-            if i != self.depth - 1:
-                upsample = nn.Sequential(
-                    nn.Upsample(scale_factor=2.0),
-                    nn.Conv2d(c_in, c_in, 3, 1, 1),
-                )
-                up.append(upsample)
-
-        self.up_blocks = nn.ModuleList(up_blocks)
-        self.up = nn.ModuleList(up)
+        self.up = nn.ModuleList(
+            [
+                # 4 x 4
+                resblock(2 * 256, 256),
+                resblock(2 * 256, 256),
+                resblock(2 * 256, 256),
+                upsample(256),
+                # 8 x 8
+                resblock(2 * 256, 256),
+                resblock(2 * 256, 256),
+                resblock(2 * 256, 256),
+                upsample(256),
+                # 16 x 16
+                resblock(2 * 256, 256, attention=True),
+                resblock(2 * 256, 256, attention=True),
+                resblock(2 * 256, 256, attention=True),
+                upsample(256),
+                # 32 x 32
+                resblock(2 * 256, 256, attention=True),
+                resblock(2 * 256, 128, attention=True),
+                resblock(2 * 128, 128, attention=True),
+            ]
+        )
 
     def forward(self, x, t):
         r"""Using timestep embeddings, predict noise to denoise :math:`x_t` from :math:`x_t` and :math:`t` using a UNet
@@ -412,30 +409,38 @@ class UNet(nn.Module):
 
         t = self.time_emb(t)
 
-        x_copies = []
-
         x = self.input_conv(x)
-        x_copies.append(x)
+        outputs = [x]
 
-        for i in range(self.depth):
-            for j in range(self.num_blocks):
-                x = self.down_blocks[self.num_blocks * i + j](x, t)
-                x_copies.append(x)
+        down = iter(self.down)
+        for _ in range(3):
+            x = next(down)(x, t)
+            outputs.append(x)
+            x = next(down)(x, t)
+            outputs.append(x)
 
-            if i != self.depth - 1:
-                x = self.down[i](x)
-                x_copies.append(x)
+            x = next(down)(x)
+            outputs.append(x)
 
-        for i in range(self.num_blocks):
-            x = self.middle[i](x, t)
+        x = next(down)(x, t)
+        outputs.append(x)
+        x = next(down)(x, t)
+        outputs.append(x)
 
-        for i in range(self.depth):
-            for j in range(self.num_blocks + 1):
-                x = torch.cat([x, x_copies.pop()], dim=1)
-                x = self.up_blocks[(self.num_blocks + 1) * i + j](x, t)
+        x = self.middle[0](x, t)
+        x = self.middle[1](x, t)
 
-            if i != self.depth - 1:
-                x = self.up[i](x)
+        up = iter(self.up)
+        for _ in range(3):
+            x = next(up)(torch.cat([x, outputs.pop()], dim=1), t)
+            x = next(up)(torch.cat([x, outputs.pop()], dim=1), t)
+            x = next(up)(torch.cat([x, outputs.pop()], dim=1), t)
+
+            x = next(up)(x)
+
+        x = next(up)(torch.cat([x, outputs.pop()], dim=1), t)
+        x = next(up)(torch.cat([x, outputs.pop()], dim=1), t)
+        x = next(up)(torch.cat([x, outputs.pop()], dim=1), t)
 
         x = self.output_conv(x)
         return x
@@ -578,9 +583,16 @@ def conv3x3(in_channels, out_channels, groups, drop_rate):
         drop_rate (float): passed to `nn.Dropout2d`
     """
 
-    return nn.Sequential(
-        nn.GroupNorm(groups, in_channels),
-        nn.SiLU(),
-        nn.Dropout2d(drop_rate) if drop_rate > 0 else nn.Identity(),
-        nn.Conv2d(in_channels, out_channels, 3, 1, 1),
-    )
+    if drop_rate > 0:
+        return nn.Sequential(
+            nn.GroupNorm(groups, in_channels),
+            nn.SiLU(),
+            nn.Dropout2d(drop_rate),
+            nn.Conv2d(in_channels, out_channels, 3, 1, 1),
+        )
+    else:
+        return nn.Sequential(
+            nn.GroupNorm(groups, in_channels),
+            nn.SiLU(),
+            nn.Conv2d(in_channels, out_channels, 3, 1, 1),
+        )
