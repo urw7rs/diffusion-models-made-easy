@@ -15,7 +15,7 @@ This library is under heavy development.
 :maxdepth: 2
 
 papers
-datamodules
+data
 callbacks
 common
 ```

@@ -1,8 +1,29 @@
 # DDIM
 
 ```{eval-rst}
-.. currentmodule:: dmme
+.. currentmodule:: dmme.ddim
 
-.. autoclass:: DDIMSampler
+.. autosummary::
+    :nosignatures:
+
+    DDIM
+    LitDDIM
+```
+
+## Sampler
+
+```{eval-rst}
+.. currentmodule:: dmme.ddim
+
+.. autoclass:: DDIM
+    :members:
+```
+
+## Training
+
+``` {eval-rst}
+.. currentmodule:: dmme.ddim
+
+.. autoclass:: LitDDIM
     :members:
 ```

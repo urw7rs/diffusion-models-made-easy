@@ -39,7 +39,7 @@ pip install dmme[docs]
 Train DDPM Using `LightningCLI` and `wandb` logger with mixed precision
 
 ```bash
-python scripts/trainer.py fit --config configs/ddpm/cifar10.yaml
+dmme.trainer fit --config configs/ddpm/cifar10.yaml
 ```
 
 Train DDPM from python using pytorch-lightning
@@ -49,16 +49,16 @@ from pytorch_lightning import Trainer
 
 from pytorch_lightning.loggers import WandbLogger
 
-from dmme import LitDDPM, DDPMSampler, CIFAR10
-from dmme.ddpm import UNet
+from dmme.ddpm import LitDDPM, UNet
+from dmme.data import CIFAR10
 
 from dmme.callbacks import GenerateImage
 
 
 def main():
     trainer = Trainer(
-        logger=WandbLogger(project="CIFAR10 Image Generation", name="DDPM"),
-        callbacks=GenerateImage((3, 32, 32)),
+        logger=WandbLogger(project="CIFAR10_Image_Generation", name="DDPM"),
+        callbacks=GenerateImage((3, 32, 32), timesteps=1000),
         gradient_clip_val=1.0,
         auto_select_gpus=True,
         accelerator="gpu",
@@ -67,7 +67,7 @@ def main():
     )
 
     ddpm = LitDDPM(
-        DDPMSampler(UNet(in_channels=3), timesteps=1000),
+        UNet(in_channels=3),
         lr=2e-4,
         warmup=5000,
         imgsize=(3, 32, 32),
@@ -92,20 +92,24 @@ from tqdm import tqdm
 
 import torch
 from torch.optim import Adam
+import torch.nn.functional as F
 
-from dmme import CIFAR10
+from dmme.data import CIFAR10
 
-from dmme.ddpm import UNet, DDPMSampler
+from dmme.ddpm import DDPM, UNet
 from dmme.lr_scheduler import WarmupLR
+
+from dmme.common import gaussian_like, uniform_int
 
 
 def train(timesteps=1000, lr=2e-4, clip_val=1.0, warmup=5000, max_steps=800_000):
     device = torch.device("cuda") if torch.cuda.is_available() else "cpu"
 
     model = UNet()
+    model = model.to(device)
 
-    sampler = DDPMSampler(model, timesteps=timesteps)
-    sampler = sampler.to(device)
+    ddpm = DDPM(timesteps=timesteps)
+    ddpm = ddpm.to(device)
 
     cifar10 = CIFAR10()
     cifar10.prepare_data()
@@ -113,7 +117,7 @@ def train(timesteps=1000, lr=2e-4, clip_val=1.0, warmup=5000, max_steps=800_000)
 
     train_dataloader = cifar10.train_dataloader()
 
-    optimizer = Adam(sampler.parameters(), lr=lr)
+    optimizer = Adam(model.parameters(), lr=lr)
     lr_scheduler = WarmupLR(optimizer, warmup=warmup)
 
     steps = 0
@@ -121,13 +125,23 @@ def train(timesteps=1000, lr=2e-4, clip_val=1.0, warmup=5000, max_steps=800_000)
         prog_bar = tqdm(train_dataloader)
         for x_0, _ in prog_bar:
             x_0 = x_0.to(device)
+
+            batch_size: int = x_0.size(0)
+            t = uniform_int(0, timesteps, batch_size, device=x_0.device)
+
+            noise = gaussian_like(x_0)
+
             with torch.autocast("cuda" if device != "cpu" else "cpu"):
-                loss = sampler.compute_loss(x_0)
+                x_t = ddpm.forward_process(x_0, t, noise)
+
+                noise_estimate = model(x_t, t)
+
+                loss = F.mse_loss(noise, noise_estimate)
 
             optimizer.zero_grad()
             loss.backward()
 
-            torch.nn.utils.clip_grad_norm_(sampler.parameters(), clip_val)
+            torch.nn.utils.clip_grad_norm_(model.parameters(), clip_val)
 
             optimizer.step()
             lr_scheduler.step()
@@ -142,7 +156,6 @@ def train(timesteps=1000, lr=2e-4, clip_val=1.0, warmup=5000, max_steps=800_000)
 
 if __name__ == "__main__":
     train()
-
 ```
 
 ## Supported Diffusion Models

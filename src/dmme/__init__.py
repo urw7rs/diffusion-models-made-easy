@@ -1,10 +1,9 @@
-from .ddpm import LitDDPM
-from .ddim import LitDDIM
-
-from .data_modules import CIFAR10
-
-from . import trainer
-
+__all__ = ["ddpm", "ddim", "data", "trainer"]
 __version__ = "0.2.0"
 
-__all__ = ["LitDDPM", "LitDDIM", "CIFAR10", "trainer"]
+from . import ddpm
+from . import ddim
+
+from . import data
+
+from . import trainer

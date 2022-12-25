@@ -5,11 +5,11 @@ import torchvision.transforms as TF
 
 from dmme.common import norm
 
-from .dataset import Dataset
+from .data_module import DataModule
 
 
-class CIFAR10(Dataset):
-    __doc__ = r"""CIFAR10 Dataset scaled to :math:`[-1, 1]`
+class CIFAR10(DataModule):
+    r"""CIFAR10 Dataset scaled to :math:`[-1, 1]`
 
     Download CIFAR10 using torchvision and apply augmentations from argument and finally scale images to :math:`[-1, 1]`
 
