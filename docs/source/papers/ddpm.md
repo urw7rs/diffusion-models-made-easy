@@ -106,30 +106,27 @@ $$
 
 
 ```{eval-rst}
-.. currentmodule:: dmme
+.. currentmodule:: dmme.ddpm
 
 .. autosummary::
     :nosignatures:
 
-    dmme.DDPMSampler
-    dmme.ddpm.linear_schedule
-    dmme.ddpm.UNet
-    dmme.LitDDPM
+    DDPM
+    linear_schedule
+    UNet
+    LitDDPM
 ```
 
 ## Sampler
 
 ```{eval-rst}
-.. currentmodule:: dmme
-
-.. autoclass:: DDPMSampler
-    :members:
-```
-
-```{eval-rst}
 .. currentmodule:: dmme.ddpm
 
+.. autoclass:: DDPM
+    :members:
+
 .. autofunction:: linear_schedule
+.. autofunction:: pad
 ```
 
 ## Model
@@ -142,51 +139,39 @@ $$
 ```
 
 ```{eval-rst}
-.. currentmodule:: dmme.ddpm.unet
+.. currentmodule:: dmme.ddpm
 
 .. autosummary::
 
-    TimeStepEmbedding
     SinusoidalPositionEmbeddings
-    Block
-    DownSample
-    UpSample
     Attention
+    PreNorm
     ResBlock
-    conv2d
+    conv3x3
 ```
 
 ```{eval-rst}
-.. currentmodule:: dmme.ddpm.unet
-
-.. autoclass:: TimeStepEmbedding
-    :members:
+.. currentmodule:: dmme.ddpm
 
 .. autoclass:: SinusoidalPositionEmbeddings
-    :members:
-
-.. autoclass:: Block
-    :members:
-
-.. autoclass:: DownSample
-    :members:
-
-.. autoclass:: UpSample
     :members:
 
 .. autoclass:: Attention
     :members:
 
+.. autoclass:: PreNorm
+    :members:
+
 .. autoclass:: ResBlock
     :members:
 
-.. autofunction:: conv2d
+.. autofunction:: conv3x3
 ```
 
 ## Training
 
 ``` {eval-rst}
-.. currentmodule:: dmme
+.. currentmodule:: dmme.ddpm
 
 .. autoclass:: LitDDPM
     :members:

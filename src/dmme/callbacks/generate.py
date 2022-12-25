@@ -1,3 +1,7 @@
+from tqdm import tqdm
+
+import torch
+
 import pytorch_lightning as pl
 
 from dmme.common import make_history, gaussian, denorm
@@ -15,23 +19,23 @@ class GenerateImage(pl.Callback):
     """
 
     def __init__(
-        self, imgsize, batch_size=8, vis_length=20, every_n_epochs=5, test=False
+        self,
+        imgsize,
+        timesteps,
+        batch_size=8,
+        vis_length=20,
+        every_n_epochs=5,
     ):
         super().__init__()
 
         self.imgsize = imgsize
+        self.timesteps = timesteps
         self.batch_size = batch_size
         self.vis_length = vis_length
         self.every_n_epochs = every_n_epochs
 
-        self.test = test
-
     def on_train_epoch_end(self, trainer, pl_module):
         self._shared_hook(trainer, pl_module)
-
-    def on_test_epoch_end(self, trainer, pl_module):
-        if self.test:
-            self._shared_hook(trainer, pl_module)
 
     def _shared_hook(self, trainer, pl_module):
         if trainer.current_epoch % self.every_n_epochs == 0:
@@ -57,30 +61,29 @@ class GenerateImage(pl.Callback):
         if isinstance(logger, pl.loggers.TensorBoardLogger):
             experiment.add_image("generated_images", grid, pl_module.global_step)
 
+    @torch.inference_mode()
     def generate_img(self, pl_module):
         pl_module.eval()
 
         denoising_sequence = []
 
         x_t = gaussian((self.batch_size, *self.imgsize), device=pl_module.device)
-        denoising_sequence.append(denorm(x_t))
+        timesteps = self.timesteps
 
-        timesteps = pl_module.hparams.timesteps
+        save_t = [
+            int(timesteps / (self.vis_length - 1) * i)
+            for i in range(self.vis_length - 1, 0, -1)
+        ]
 
-        step = timesteps // (self.vis_length - 1)
-        if timesteps % (self.vis_length - 1) > 0:
-            step += 1
+        for t in tqdm(range(timesteps, 0, -1), leave=False):
+            if t in save_t:
+                denoising_sequence.append(denorm(x_t.clone().detach()))
 
-        t = timesteps
-        save_t = t - step
-        while t > 0:
-            while t > save_t:
-                x_t = pl_module(x_t, t, t - 1)
-                t -= 1
+            x_t = pl_module(x_t, t)
 
-            denoising_sequence.append(denorm(x_t.clone().detach()))
+        denoising_sequence.append(denorm(x_t.clone().detach()))
 
-            save_t -= step
+        assert len(denoising_sequence) == self.vis_length, breakpoint()
 
         pl_module.train()
 

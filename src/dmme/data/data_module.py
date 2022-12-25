@@ -4,7 +4,7 @@ import pytorch_lightning as pl
 from torch.utils.data import DataLoader
 
 
-class Dataset(pl.LightningDataModule):
+class DataModule(pl.LightningDataModule):
     """LightningDataModule with defaults for generative modeling
 
     > Defaults are set from DDPM.
