@@ -77,15 +77,20 @@ model:
         in_channels: 3
         pos_dim: 128
         emb_dim: 512
+        num_groups: 32
+        p: 0.1
         channels:
           - 128
           - 256
           - 256
           - 256
-        attn_depth:
+          - 256
+        attention_depth:
           - 2
-        groups: 32
-        drop_rate: 0.1
+        downsample_depth:
+          - 1
+          - 2
+          - 3
     lr: 2e-4
     warmup: 5000
     imgsize:
