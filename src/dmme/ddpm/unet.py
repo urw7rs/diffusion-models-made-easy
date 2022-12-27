@@ -1,50 +1,33 @@
+import functools
+
 import math
 
-from einops import rearrange, einsum
+from einops import rearrange, parse_shape
 from einops.layers.torch import Rearrange
 
 import torch
-from torch import nn
+from torch import is_deterministic_algorithms_warn_only_enabled, nn
 import torch.nn.functional as F
 
 from torch import Tensor
 
 from einops.layers.torch import Rearrange
 
-import dmme.nn as dnn
-
-
-def default_norm(num_groups, num_channels):
-    return nn.GroupNorm(num_groups, num_channels)
-
 
 def default_act():
     return nn.SiLU()
 
 
-def default_dropout(p):
-    return nn.Dropout2d(p)
-
-
-def conv_norm_act_drop(in_channels, out_channels, num_groups, p):
-    conv = nn.Conv2d(in_channels, out_channels, kernel_size=3, stride=1, padding=1)
-    norm = default_norm(num_groups, out_channels)
+def norm_act_drop_conv(in_channels, out_channels, num_groups, p):
+    norm = nn.GroupNorm(num_groups, in_channels)
     act = default_act()
     drop = nn.Dropout2d(p)
+    conv = nn.Conv2d(in_channels, out_channels, kernel_size=3, stride=1, padding=1)
 
     if p > 0:
-        return nn.Sequential(conv, norm, act, drop)
+        return nn.Sequential(norm, act, drop, conv)
     else:
-        return nn.Sequential(conv, norm, act)
-
-
-class Adapter(nn.Module):
-    def __init__(self, module) -> None:
-        super().__init__()
-        self.module = module
-
-    def forward(self, x, *args, **kwargs):
-        return self.module(x)
+        return nn.Sequential(norm, act, conv)
 
 
 class Attention(nn.Module):
@@ -56,7 +39,6 @@ class Attention(nn.Module):
 
     def __init__(self, dim):
         super().__init__()
-
         self.scale = dim**-0.5
         self.to_qkv = nn.Conv2d(dim, dim * 3, 1, bias=False)
         self.to_out = nn.Conv2d(dim, dim, 1, bias=False)
@@ -67,26 +49,70 @@ class Attention(nn.Module):
         Returns:
             x
         """
-        h, w = x.size()[2:]
-
         qkv = self.to_qkv(x)
-
         qkv = rearrange(qkv, "b c h w -> b c (h w)")
         query, key, value = qkv.chunk(3, dim=1)
-
-        score = einsum(query * self.scale, key, "b c qhw, b c khw -> b qhw khw")
-
-        attention = F.softmax(score, dim=-1)
-
-        out = einsum(attention, value, "b qhw khw, b c khw -> b c qhw")
-
-        out = rearrange(out, "b c (h w) -> b c h w", h=h, w=w)
-
+        query = rearrange(query, "b c hw -> b hw c") * self.scale
+        value = rearrange(value, "b c hw -> b hw c") * self.scale
+        score = torch.bmm(query, key)
+        attention = F.softmax(score, dim=2)
+        out = torch.bmm(attention, value)
+        out = rearrange(out, "b (h w) c -> b c h w", **parse_shape(x, "b c h w"))
         return self.to_out(out)
 
 
-def inout(channels):
+def pairs(channels):
     return zip(channels[:-1], channels[1:])
+
+
+class ResBlock(nn.Module):
+    def __init__(
+        self, c_in, c_out, with_attention=False, emb_dim=512, num_groups=32, p=0.1
+    ) -> None:
+        super().__init__()
+
+        self.conv1 = norm_act_drop_conv(c_in, c_out, num_groups, p=0.0)
+
+        self.condition = nn.Sequential(
+            nn.Linear(emb_dim, c_out),
+            Rearrange("b c -> b c 1 1"),
+        )
+
+        self.conv2 = norm_act_drop_conv(c_out, c_out, num_groups, p)
+
+        if c_in != c_out:
+            self.residual = nn.Conv2d(c_in, c_out, 3, 1, 1)
+        else:
+            self.residual = nn.Identity()
+
+        if with_attention:
+            self.attention = Attention(c_out)
+        else:
+            self.attention = nn.Identity()
+
+    def forward(self, x, c):
+        h = self.conv1(x)
+        h += self.condition(c)
+        h = self.conv2(h)
+        h = self.attention(h)
+        return h + self.residual(x)
+
+
+def DownSample(c_in, c_out):
+    return nn.Conv2d(c_in, c_out, 3, 2, 1)
+
+
+class UpSample(nn.Module):
+    def __init__(self, c_in, c_out) -> None:
+        super().__init__()
+
+        self.upsample = nn.Upsample(scale_factor=2.0)
+        self.conv = nn.Conv2d(c_in, c_out, 3, 1, 1)
+
+    def forward(self, x):
+        x = self.upsample(x)
+        x = self.conv(x)
+        return x
 
 
 class UNet(nn.Module):
@@ -110,15 +136,15 @@ class UNet(nn.Module):
         emb_dim=512,
         num_groups=32,
         p=0.1,
-        channels=(128, 256, 256, 256, 256),
-        attention_depth=(2,),
-        downsample_depth=(1, 2, 3),
+        channels=(128, 256, 256, 256, 256, 256, 256, 256, 256),
+        attention_depths=(2,),
+        downsample_layers=(2, 4, 6),
     ):
         super().__init__()
 
-        depth = max(downsample_depth) + 1
-
-        upsample_depth = tuple(depth - i + 1 for i in downsample_depth)
+        original_depth = 1
+        new_depths = len(downsample_layers)
+        max_depth = original_depth + new_depths
 
         self.condition = nn.Sequential(
             SinusoidalPositionEmbeddings(pos_dim),
@@ -127,132 +153,51 @@ class UNet(nn.Module):
             nn.Linear(emb_dim, emb_dim),
             default_act(),
         )
-        self.input_conv = conv_norm_act_drop(3, channels[0], num_groups, p=0.0)
+        self.input_conv = nn.Conv2d(
+            in_channels, channels[0], kernel_size=3, stride=1, padding=1
+        )
 
-        def make_block(c_in, c_out):
-            modules = [
-                (nn.Conv2d(c_in, c_out, 3, 1, 1), "x -> h"),
-                (
-                    nn.Sequential(
-                        nn.Linear(emb_dim, c_out),
-                        Rearrange("b c -> b c 1 1"),
-                    ),
-                    "t -> t",
-                ),
-                (dnn.Add(), "h t -> h"),
-                (
-                    nn.Sequential(
-                        default_norm(num_groups, c_out),
-                        default_act(),
-                        default_dropout(p),
-                        conv_norm_act_drop(c_out, c_out, num_groups, p=0),
-                    ),
-                    "h -> h",
-                ),
-                (dnn.Add(), "x h -> x"),
-            ]
+        default_resblock = functools.partial(
+            ResBlock, emb_dim=emb_dim, num_groups=num_groups, p=p
+        )
 
-            if c_in != c_out:
-                modules.insert(
-                    len(modules) - 1, (nn.Conv2d(c_in, c_out, 3, 1, 1), "x -> x")
-                )
+        down_layers = []
+        up_layers = []
 
-            return dnn.Sequential(*modules)
+        up_layers += [
+            default_resblock(2 * channels[0], channels[0], 1 in attention_depths)
+        ]
 
-        def make_attention(dim):
-            return dnn.Sequential(
-                (
-                    nn.Sequential(
-                        default_norm(num_groups, dim),
-                        Attention(dim),
-                    ),
-                    "x -> h",
-                ),
-                (dnn.Add(), "x h -> x"),
-            )
+        depth = 1
+        for layer_num, (c_in, c_out) in enumerate(pairs(channels)):
+            with_attention = depth in attention_depths
+            downsample = layer_num in downsample_layers
 
-        layers = []
-        for current_depth, (c_in, c_out) in zip(range(1, depth + 1), inout(channels)):
-            if current_depth in attention_depth:
-                blocks = [
-                    dnn.Sequential(
-                        (make_block(c_in, c_out), "x t -> x"),
-                        (make_attention(c_out), "x -> x"),
-                    ),
-                    dnn.Sequential(
-                        (make_block(c_out, c_out), "x t -> x"),
-                        (make_attention(c_out), "x -> x"),
-                    ),
-                ]
-            else:
-                blocks = [
-                    make_block(c_in, c_out),
-                    make_block(c_out, c_out),
-                ]
+            if downsample:
+                down_layers += [DownSample(c_out, c_out)]
+                up_layers += [UpSample(c_out, c_out)]
 
-            layers.extend(blocks)
+                up_layers += [default_resblock(2 * c_out, c_out, 1 in attention_depths)]
 
-            if current_depth in downsample_depth:
-                layers.append(Adapter(nn.Conv2d(c_out, c_out, 3, 2, 1)))
+                depth += 1
 
-        self.down_layers = nn.ModuleList(layers)
+            down_layers += [default_resblock(c_in, c_out, with_attention)]
+            up_layers += [default_resblock(2 * c_out, c_in, with_attention)]
+
+        self.down_layers = nn.ModuleList(down_layers)
+        self.up_layers = nn.ModuleList(up_layers)
 
         c_out = channels[-1]
         self.middle_layers = nn.ModuleList(
             [
-                dnn.Sequential(
-                    (make_block(c_out, c_out), "x t -> x"),
-                    (make_attention(c_out), "x -> x"),
-                ),
-                make_block(c_out, c_out),
+                default_resblock(c_out, c_out, with_attention=True),
+                default_resblock(c_out, c_out, with_attention=False),
             ]
         )
 
-        layers = []
-        for current_depth, (c_in, c_out) in zip(
-            range(depth, 0, -1), inout(channels[::-1])
-        ):
-            if depth in attention_depth:
-                blocks = [
-                    dnn.Sequential(
-                        (make_block(2 * c_in, c_in), "x t -> x"),
-                        (make_attention(c_out), "x -> x"),
-                    ),
-                    dnn.Sequential(
-                        (make_block(2 * c_in, c_out), "x t -> x"),
-                        (make_attention(c_out), "x -> x"),
-                    ),
-                    dnn.Sequential(
-                        (make_block(2 * c_out, c_out), "x t -> x"),
-                        (make_attention(c_out)),
-                        "x -> x",
-                    ),
-                ]
-            else:
-                blocks = [
-                    make_block(2 * c_in, c_in),
-                    make_block(2 * c_in, c_out),
-                    make_block(2 * c_out, c_out),
-                ]
-
-            if current_depth in upsample_depth:
-                block = blocks[-1]
-                blocks[-1] = dnn.Sequential(
-                    (block, "x t -> x"),
-                    (
-                        nn.Sequential(
-                            nn.Upsample(scale_factor=2.0),
-                            nn.Conv2d(c_in, c_in, 3, 1, 1),
-                        ),
-                        "x -> x",
-                    ),
-                )
-
-            layers.extend(blocks)
-
-        self.up_layers = nn.ModuleList(layers)
-
-        self.output_conv = nn.Conv2d(channels[0], 3, kernel_size=3, stride=1, padding=1)
+        self.output_conv = norm_act_drop_conv(
+            channels[0], in_channels, num_groups, p=0.0
+        )
 
     def forward(self, x, c):
         t = self.condition(c)
@@ -262,15 +207,22 @@ class UNet(nn.Module):
         outputs = [x]
 
         for f in self.down_layers:
-            x = f(x=x, t=t)
+            if isinstance(f, ResBlock):
+                x = f(x, t)
+            else:
+                x = f(x)
+
             outputs.append(x)
 
         for f in self.middle_layers:
-            x = f(x=x, t=t)
+            x = f(x, t)
 
-        for f in self.up_layers:
-            x = torch.cat([x, outputs.pop()], dim=1)
-            x = f(x=x, t=t)
+        for f in reversed(self.up_layers):
+            if isinstance(f, ResBlock):
+                x = torch.cat([x, outputs.pop()], dim=1)
+                x = f(x, t)
+            else:
+                x = f(x)
 
         x = self.output_conv(x)
         return x
