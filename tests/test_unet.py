@@ -2,10 +2,7 @@ import torch
 
 from dmme.ddpm import UNet
 
-import pytest
 
-
-@pytest.mark
 def test_unet():
     model = UNet(in_channels=3)
 
