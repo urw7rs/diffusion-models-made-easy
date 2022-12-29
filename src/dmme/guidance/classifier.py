@@ -1,5 +1,4 @@
 import torch
-from torch import nn
 import torch.nn.functional as F
 
 from dmme.ddpm import DDPM
@@ -25,30 +24,32 @@ class ClassifierMixin:
 
 
 class ClassifierGuidedDDPM(DDPM, ClassifierMixin):
-    def __init__(self, timesteps=1000, guidance_scale=4.0) -> None:
+    def __init__(self, timesteps=1000, guidance_scale=10.0) -> None:
         super().__init__(timesteps)
 
-        self.s = guidance_scale
+        self.scale = guidance_scale
 
     def sample(self, model, classifier, y, x_t, t, noise):
         x_t = super().reverse_process(model, x_t, t, noise)
-        x_t += self.s * self.classifier_grad(classifier, y, x_t, t)
+        x_t += self.scale * self.classifier_grad(classifier, y, x_t, t)
 
         return x_t
 
 
 class ClassifierGuidedDDIM(DDIM, ClassifierMixin):
-    def __init__(self, timesteps, tau_schedule="quadratic", guidance_scale=4.0) -> None:
+    def __init__(
+        self, timesteps, tau_schedule="quadratic", guidance_scale=10.0
+    ) -> None:
         super().__init__(timesteps, tau_schedule)
 
-        self.s = guidance_scale
+        self.scale = guidance_scale
 
     def reverse_process(self, model, classifier, y, x_t, t):
         alpha_bar_t_minus_one = self.alpha_bar[t - 1]
         alpha_bar_t = self.alpha_bar[t]
 
         grad = self.classifier_grad(classifier, y, x_t, t)
-        epsilon = model(x_t, t) - torch.sqrt(1 - alpha_bar_t) * grad
+        epsilon = model(x_t, t) - torch.sqrt(1 - alpha_bar_t) * self.scale * grad
 
         x_t = (
             torch.sqrt(alpha_bar_t_minus_one)
