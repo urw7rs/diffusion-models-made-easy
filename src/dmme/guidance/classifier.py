@@ -9,7 +9,7 @@ from dmme.ddim import DDIM
 class ClassifierMixin:
     def classifier_grad(self, classifier, y, x_t, t):
         x_t = x_t.requires_grad_(True)
-        t = t.requires_grad_(True)
+        t = t.float().requires_grad_(True)
 
         with torch.enable_grad():
             logits = classifier(x_t, t)
