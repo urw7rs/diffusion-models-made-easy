@@ -153,7 +153,11 @@ class DDPM(nn.Module):
 
     def generate(self, img_size: Tuple[int, int, int, int]):
         x_t = gaussian(img_size, device=self.beta.device)
-        all_t = torch.arange(0, self.timesteps + 1)
+        all_t = torch.arange(
+            0,
+            self.timesteps + 1,
+            device=self.beta.device,
+        ).unsqueeze(dim=1)
 
         for t in tqdm(range(self.timesteps, 0, -1), leave=False):
             x_t = self.sampling_step(x_t, all_t[t])

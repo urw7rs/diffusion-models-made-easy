@@ -37,4 +37,4 @@ class LitDDIM(LitDDPM):
         super().__init__(model, lr, warmup, imgsize, timesteps, decay)
 
         self.sample_steps = sample_steps
-        self.ddim = DDIM(model, timesteps, sample_steps, tau_schedule=tau_schedule)
+        self.diffusion = DDIM(model, timesteps, sample_steps, tau_schedule=tau_schedule)

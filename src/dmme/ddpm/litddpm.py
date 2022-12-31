@@ -13,7 +13,7 @@ from torch.optim import Adam
 from dmme.lr_scheduler import WarmupLR
 from dmme.callbacks import EMA
 
-from dmme.common import denorm, gaussian_like
+from dmme.common import denorm
 
 from .ddpm import DDPM
 from .unet import UNet
@@ -48,7 +48,7 @@ class LitDDPM(pl.LightningModule):
         if model is None:
             model = UNet(in_channels=3)
 
-        self.ddpm = DDPM(model, timesteps=timesteps)
+        self.diffusion = DDPM(model, timesteps=timesteps)
 
         self.fid = FrechetInceptionDistance(
             normalize=True,
@@ -70,7 +70,7 @@ class LitDDPM(pl.LightningModule):
         """
 
         timestep = torch.tensor([t], device=x_t.device)
-        x_t = self.ddpm.sampling_step(x_t, timestep)
+        x_t = self.diffusion.sampling_step(x_t, timestep)
         return x_t
 
     def training_step(self, batch, batch_idx):
@@ -78,7 +78,7 @@ class LitDDPM(pl.LightningModule):
 
         x_0: Tensor = batch[0]
 
-        loss: Tensor = self.ddpm.training_step(x_0)
+        loss: Tensor = self.diffusion.training_step(x_0)
         self.log("train/loss", loss)
 
         return loss
@@ -90,23 +90,20 @@ class LitDDPM(pl.LightningModule):
 
         self.fid.update(denorm(x), real=True)
 
-        x_t: Tensor = gaussian_like(x)
-
-        x_t = self.generate(x_t)
-
+        x_t = self.generate(x.size())
         fake_x: Tensor = denorm(x_t)
 
         self.fid.update(fake_x, real=False)
         self.inception.update(fake_x)
 
-    def generate(self, x_t):
+    def generate(self, img_size):
         r"""Iteratively sample from :math:`p_\theta(x_{t-1}|x_t)` to generate images
 
         Args:
             x_t (torch.Tensor): :math:`x_T` to start from
         """
 
-        x_t = self.ddpm.generate(img_size=(1, 2, 32, 32))
+        x_t = self.diffusion.generate(img_size=img_size)
         return x_t
 
     def test_epoch_end(self, outputs):
@@ -122,7 +119,7 @@ class LitDDPM(pl.LightningModule):
     def configure_optimizers(self):
         """Configure optimizers for training Uses Adam and warmup lr"""
 
-        optimizer = Adam(self.ddpm.parameters(), lr=self.hparams.lr)
+        optimizer = Adam(self.diffusion.parameters(), lr=self.hparams.lr)
         lr_scheduler = WarmupLR(optimizer, self.hparams.warmup)
 
         scheduler = {"scheduler": lr_scheduler, "interval": "step", "frequency": 1}

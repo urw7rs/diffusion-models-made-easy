@@ -1,19 +1,23 @@
+from typing import Tuple
+from tqdm import tqdm
+
 import torch
 
 from dmme import ddpm
+from dmme.common import gaussian
 
 
 def linear_tau(timesteps, sub_timesteps):
     all_t = torch.arange(0, sub_timesteps + 1)
     c = timesteps / sub_timesteps
-    tau = torch.round(c * all_t)
+    tau = torch.round(c * all_t).long()
     return tau
 
 
 def quadratic_tau(timesteps, sub_timesteps):
     all_t = torch.arange(0, sub_timesteps + 1)
     c = timesteps / (timesteps**2)
-    tau = torch.round(c * all_t**2)
+    tau = torch.round(c * all_t**2).long()
     return tau
 
 
@@ -45,6 +49,8 @@ class DDIM(ddpm.DDPM):
         self, model, timesteps, sub_timesteps, tau_schedule="quadratic"
     ) -> None:
         super().__init__(model, timesteps)
+
+        self.sub_timesteps = sub_timesteps
 
         tau_schedule = tau_schedule.lower()
         if tau_schedule == "linear":
@@ -99,7 +105,7 @@ class DDIM(ddpm.DDPM):
 
         return x_tau_i_minus_one
 
-    def sample(self, x_tau_i, i):
+    def sampling_step(self, x_tau_i, i):
         r"""Sample from :math:`p_\theta(x_{t-1}|x_t)`
 
         Args:
@@ -111,3 +117,16 @@ class DDIM(ddpm.DDPM):
             (torch.Tensor): generated sample of shape :math:`(N, C, H, W)`
         """
         return self.reverse_process(x_tau_i, i)
+
+    def generate(self, img_size: Tuple[int, int, int, int]):
+        x_tau_i = gaussian(img_size, device=self.beta.device)
+        all_i = torch.arange(
+            0,
+            self.sub_timesteps + 1,
+            device=self.beta.device,
+        ).unsqueeze(dim=1)
+
+        for i in tqdm(range(self.sub_timesteps, 0, -1), leave=False):
+            x_tau_i = self.sampling_step(x_tau_i, all_i[i])
+
+        return x_tau_i
