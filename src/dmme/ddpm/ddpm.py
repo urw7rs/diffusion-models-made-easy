@@ -113,7 +113,13 @@ class DDPM(nn.Module):
 
     def training_step(self, x_0):
         batch_size = x_0.size(0)
-        time = uniform_int(0, self.timesteps, batch_size, device=x_0.device)
+
+        time = uniform_int(
+            0,
+            self.timesteps,
+            batch_size,
+            device=x_0.device,
+        )
         noise = gaussian_like(x_0)
 
         alpha_bar_t = self.alpha_bar[time]
