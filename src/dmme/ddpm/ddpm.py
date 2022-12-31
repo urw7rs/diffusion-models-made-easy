@@ -23,16 +23,6 @@ def linear_schedule(timesteps: int, start=0.0001, end=0.02) -> torch.Tensor:
     return dmme.pad(beta)
 
 
-def alphas(beta):
-    return 1 - beta
-
-
-def alpha_bars(alpha):
-    # alpha[0] = 1 so no problems here
-    alpha_bar = torch.cumprod(alpha, dim=0)
-    return alpha_bar
-
-
 def sample_gaussian(mean, variance, noise):
     return mean + torch.sqrt(variance) * noise
 
@@ -77,8 +67,10 @@ class DDPM(nn.Module):
         beta = linear_schedule(timesteps)
         beta = einops.rearrange(beta, "t -> t 1 1 1")
 
-        alpha = alphas(beta)
-        alpha_bar = alpha_bars(alpha)
+        alpha = 1 - beta
+
+        # alpha[0] = 1 so no problems here
+        alpha_bar = torch.cumprod(alpha, dim=0)
 
         self.register_buffer("beta", beta, persistent=False)
         self.register_buffer("alpha", alpha, persistent=False)
@@ -150,3 +142,7 @@ class DDPM(nn.Module):
             x_t = self.sampling_step(x_t, all_t[t])
 
         return x_t
+
+    def forward(self, x, t):
+        noise_in_x = self.model(x, t)
+        return noise_in_x
