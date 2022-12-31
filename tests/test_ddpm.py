@@ -1,15 +1,6 @@
 import torch
-from torch import nn
 
 from dmme.ddpm import DDPM, UNet
-
-
-class DummyModel(nn.Module):
-    def __init__(self) -> None:
-        super().__init__()
-
-    def forward(self, x, *args):
-        return x
 
 
 def test_ddpm_training():
