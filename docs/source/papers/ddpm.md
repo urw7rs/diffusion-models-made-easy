@@ -21,7 +21,7 @@ q(\bx_t|\bx_{t-1}) \defeq \mathcal{N}(\bx_t;\sqrt{1-\beta_t}\bx_{t-1},\beta_t \b
 \end{aligned}
 $$
 
-Note that we can sample $\bx_t$ for an arbitrary timestep $t# in closed form:
+Note that we can sample $\bx_t$ for an arbitrary timestep $t$ in closed form:
 
 $$
 \begin{aligned}
