@@ -24,6 +24,31 @@ def quadratic_tau(timesteps, sub_timesteps):
 def reverse_process(
     x_tau_i, alpha_bar_tau_i, alpha_bar_tau_i_minus_one, noise_in_x_tau_i
 ):
+    r"""Reverse Denoising Process
+
+    Samples :math:`x_{t-1}` from
+    :math:`p_\theta(\bold{x}_{t-1}|\bold{x}_t)
+    = \mathcal{N}(\bold{x}_{t-1};\mu_\theta(\bold{x}_t, t), \sigma_t\bold{I})`
+
+    .. math::
+        \begin{aligned}
+        \bold\mu_\theta(\bold{x}_t, t)
+        &= \frac{1}{\sqrt{\alpha_t}}\bigg(\bold{x}_t
+        -\frac{\beta_t}{\sqrt{1-\bar\alpha_t}}\epsilon_\theta(\bold{x}_t,t)\bigg) \\
+        \sigma_t &= \beta_t
+        \end{aligned}
+
+    Computes :math:`\bold{x}_{t-1}
+    = \frac{1}{\sqrt{\alpha_t}}\bigg(\bold{x}_t
+    -\frac{\beta_t}{\sqrt{1-\bar\alpha_t}}\epsilon_\theta(\bold{x}_t,t)\bigg)
+    +\sigma_t\epsilon`
+
+    Args:
+        model (nn.Module): model for estimating noise
+        x_t (torch.Tensor): x_t
+        t (int): current timestep
+        noise (torch.Tensor): noise
+    """
     predicted_x_0 = (
         x_tau_i - torch.sqrt(1 - alpha_bar_tau_i) * noise_in_x_tau_i
     ) / torch.sqrt(alpha_bar_tau_i)
@@ -64,31 +89,16 @@ class DDIM(ddpm.DDPM):
 
         self.register_buffer("tau", tau, persistent=False)
 
-    def reverse_process(self, x_tau_i, i):
-        r"""Reverse Denoising Process
-
-        Samples :math:`x_{t-1}` from
-        :math:`p_\theta(\bold{x}_{t-1}|\bold{x}_t)
-        = \mathcal{N}(\bold{x}_{t-1};\mu_\theta(\bold{x}_t, t), \sigma_t\bold{I})`
-
-        .. math::
-            \begin{aligned}
-            \bold\mu_\theta(\bold{x}_t, t)
-            &= \frac{1}{\sqrt{\alpha_t}}\bigg(\bold{x}_t
-            -\frac{\beta_t}{\sqrt{1-\bar\alpha_t}}\epsilon_\theta(\bold{x}_t,t)\bigg) \\
-            \sigma_t &= \beta_t
-            \end{aligned}
-
-        Computes :math:`\bold{x}_{t-1}
-        = \frac{1}{\sqrt{\alpha_t}}\bigg(\bold{x}_t
-        -\frac{\beta_t}{\sqrt{1-\bar\alpha_t}}\epsilon_\theta(\bold{x}_t,t)\bigg)
-        +\sigma_t\epsilon`
+    def sampling_step(self, x_tau_i, i):
+        r"""Sample from :math:`p_\theta(x_{t-1}|x_t)`
 
         Args:
             model (nn.Module): model for estimating noise
-            x_t (torch.Tensor): x_t
-            t (int): current timestep
-            noise (torch.Tensor): noise
+            x_t (torch.Tensor): image of shape :math:`(N, C, H, W)`
+            t (int): starting :math:`t` to sample from
+
+        Returns:
+            (torch.Tensor): generated sample of shape :math:`(N, C, H, W)`
         """
 
         tau_i = self.tau[i]
@@ -104,19 +114,6 @@ class DDIM(ddpm.DDPM):
         )
 
         return x_tau_i_minus_one
-
-    def sampling_step(self, x_tau_i, i):
-        r"""Sample from :math:`p_\theta(x_{t-1}|x_t)`
-
-        Args:
-            model (nn.Module): model for estimating noise
-            x_t (torch.Tensor): image of shape :math:`(N, C, H, W)`
-            t (int): starting :math:`t` to sample from
-
-        Returns:
-            (torch.Tensor): generated sample of shape :math:`(N, C, H, W)`
-        """
-        return self.reverse_process(x_tau_i, i)
 
     def generate(self, img_size: Tuple[int, int, int, int]):
         x_tau_i = gaussian(img_size, device=self.beta.device)

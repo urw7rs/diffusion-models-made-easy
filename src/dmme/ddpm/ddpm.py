@@ -65,10 +65,10 @@ def forward_process(image, alpha_bar_t, noise):
     return sample_gaussian(mean, variance, noise)
 
 
-def reverse_process(x_t, beta_t, alpha_bar_t, noise_in_x_t, variance, noise):
+def reverse_process(x_t, beta_t, alpha_t, alpha_bar_t, noise_in_x_t, variance, noise):
     mean = (
         1
-        / torch.sqrt(alpha_bar_t)
+        / torch.sqrt(alpha_t)
         * (x_t - beta_t / torch.sqrt(1 - alpha_bar_t) * noise_in_x_t)
     )
     return sample_gaussian(mean, variance, noise)
@@ -109,7 +109,7 @@ class DDPM(nn.Module):
         self.register_buffer("beta", beta, persistent=False)
         self.register_buffer("alpha", alpha, persistent=False)
         self.register_buffer("alpha_bar", alpha_bar, persistent=False)
-        self.register_buffer("sigma", torch.sqrt(beta), persistent=False)
+        self.register_buffer("sigma", beta, persistent=False)
 
     def training_step(self, x_0):
         batch_size = x_0.size(0)
@@ -148,12 +148,19 @@ class DDPM(nn.Module):
         noise[idx] = 0
 
         beta_t = self.beta[t]
+        alpha_t = self.alpha[t]
         alpha_bar_t = self.alpha_bar[t]
         sigma_t = self.sigma[t]
 
         noise_in_x_t = self.model(x_t, t)
         x_t = reverse_process(
-            x_t, beta_t, alpha_bar_t, noise_in_x_t, variance=sigma_t, noise=noise
+            x_t,
+            beta_t,
+            alpha_t,
+            alpha_bar_t,
+            noise_in_x_t,
+            variance=sigma_t,
+            noise=noise,
         )
         return x_t
 

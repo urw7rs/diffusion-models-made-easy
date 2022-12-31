@@ -83,8 +83,6 @@ class GenerateImage(pl.Callback):
 
         denoising_sequence.append(denorm(x_t.clone().detach()))
 
-        assert len(denoising_sequence) == self.vis_length, breakpoint()
-
         pl_module.train()
 
         return denoising_sequence
