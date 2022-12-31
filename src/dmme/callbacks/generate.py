@@ -4,7 +4,7 @@ import torch
 
 import pytorch_lightning as pl
 
-from dmme.common import make_history, gaussian, denorm
+import dmme
 
 
 class GenerateImage(pl.Callback):
@@ -44,7 +44,7 @@ class GenerateImage(pl.Callback):
                 return
 
             history = self.generate_img(pl_module)
-            grid = make_history(history)
+            grid = dmme.make_history(history)
 
             if isinstance(trainer.logger, list):
                 for logger in trainer.logger:
@@ -67,7 +67,7 @@ class GenerateImage(pl.Callback):
 
         denoising_sequence = []
 
-        x_t = gaussian((self.batch_size, *self.imgsize), device=pl_module.device)
+        x_t = dmme.gaussian((self.batch_size, *self.imgsize), device=pl_module.device)
         timesteps = self.timesteps
 
         save_t = [
@@ -77,11 +77,11 @@ class GenerateImage(pl.Callback):
 
         for t in tqdm(range(timesteps, 0, -1), leave=False):
             if t in save_t:
-                denoising_sequence.append(denorm(x_t.clone().detach()))
+                denoising_sequence.append(dmme.denorm(x_t.clone().detach()))
 
             x_t = pl_module(x_t, t)
 
-        denoising_sequence.append(denorm(x_t.clone().detach()))
+        denoising_sequence.append(dmme.denorm(x_t.clone().detach()))
 
         pl_module.train()
 

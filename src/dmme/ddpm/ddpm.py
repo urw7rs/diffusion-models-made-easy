@@ -7,29 +7,7 @@ from torch import nn
 
 import einops
 
-from dmme.common import uniform_int, gaussian_like
-
-
-def gaussian(shape, dtype=None, device=None):
-    """Samples from gaussian with specified shape, dtype, device using `torch.randn`"""
-    return torch.randn(shape, dtype=dtype, device=device)
-
-
-def gaussian_like(x):
-    """Samples from gaussian like the tensor x using `torch.randn_like`"""
-    return torch.randn_like(x)
-
-
-def uniform_int(min, max, count=1, device=None):
-    """Samples ints from uniform distribution using `torch.randint`"""
-    return torch.randint(min, max, size=(count,), device=device)
-
-
-def pad(x: torch.Tensor, value: float = 0) -> torch.Tensor:
-    r"""pads tensor with 0 to match :math:`t` with tensor index"""
-
-    ones = torch.ones_like(x[0:1])
-    return torch.cat([ones * value, x], dim=0)
+import dmme
 
 
 def linear_schedule(timesteps: int, start=0.0001, end=0.02) -> torch.Tensor:
@@ -42,7 +20,7 @@ def linear_schedule(timesteps: int, start=0.0001, end=0.02) -> torch.Tensor:
     """
 
     beta = torch.linspace(start, end, timesteps)
-    return pad(beta)
+    return dmme.pad(beta)
 
 
 def alphas(beta):
@@ -96,15 +74,11 @@ class DDPM(nn.Module):
         self.model = model
         self.timesteps = timesteps
 
-        time = torch.arange(0, timesteps + 1)
-        self.register_buffer("time", time)
-
         beta = linear_schedule(timesteps)
         beta = einops.rearrange(beta, "t -> t 1 1 1")
 
-        alpha = 1 - beta
-        # alpha[0] = 1 so no problems here
-        alpha_bar = torch.cumprod(alpha, dim=0)
+        alpha = alphas(beta)
+        alpha_bar = alpha_bars(alpha)
 
         self.register_buffer("beta", beta, persistent=False)
         self.register_buffer("alpha", alpha, persistent=False)
@@ -114,13 +88,13 @@ class DDPM(nn.Module):
     def training_step(self, x_0):
         batch_size = x_0.size(0)
 
-        time = uniform_int(
+        time = dmme.uniform_int(
             0,
             self.timesteps,
             batch_size,
             device=x_0.device,
         )
-        noise = gaussian_like(x_0)
+        noise = dmme.gaussian_like(x_0)
 
         alpha_bar_t = self.alpha_bar[time]
 
@@ -142,7 +116,7 @@ class DDPM(nn.Module):
         Returns:
             (torch.Tensor): generated sample of shape :math:`(N, C, H, W)`
         """
-        noise = gaussian_like(x_t)
+        noise = dmme.gaussian_like(x_t)
 
         (idx,) = torch.where(t == 1)
         noise[idx] = 0
@@ -165,7 +139,7 @@ class DDPM(nn.Module):
         return x_t
 
     def generate(self, img_size: Tuple[int, int, int, int]):
-        x_t = gaussian(img_size, device=self.beta.device)
+        x_t = dmme.gaussian(img_size, device=self.beta.device)
         all_t = torch.arange(
             0,
             self.timesteps + 1,

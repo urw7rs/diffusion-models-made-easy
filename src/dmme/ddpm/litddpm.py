@@ -13,8 +13,6 @@ from torch.optim import Adam
 from dmme.lr_scheduler import WarmupLR
 from dmme.callbacks import EMA
 
-from dmme.common import denorm
-
 from .ddpm import DDPM
 from .unet import UNet
 
@@ -88,10 +86,10 @@ class LitDDPM(pl.LightningModule):
 
         x: Tensor = batch[0]
 
-        self.fid.update(denorm(x), real=True)
+        self.fid.update(dmme.denorm(x), real=True)
 
         x_t = self.generate(x.size())
-        fake_x: Tensor = denorm(x_t)
+        fake_x: Tensor = dmme.denorm(x_t)
 
         self.fid.update(fake_x, real=False)
         self.inception.update(fake_x)
