@@ -1,9 +1,8 @@
-from typing import Tuple, Optional
+from typing import Tuple
 
 import torch
 from torch import nn
 from torch import Tensor
-import torch.nn.functional as F
 
 import pytorch_lightning as pl
 
@@ -13,8 +12,6 @@ from torchmetrics.image.inception import InceptionScore
 from torch.optim import Adam
 from dmme.lr_scheduler import WarmupLR
 from dmme.callbacks import EMA
-
-from dmme.common import denorm, gaussian_like, uniform_int
 
 from .ddpm import DDPM
 from .unet import UNet
@@ -47,11 +44,9 @@ class LitDDPM(pl.LightningModule):
         self.save_hyperparameters(ignore=["model"])
 
         if model is None:
-            model = UNet()
+            model = UNet(in_channels=3)
 
-        self.model = model
-
-        self.process = DDPM(timesteps=timesteps)
+        self.diffusion = DDPM(model, timesteps=timesteps)
 
         self.fid = FrechetInceptionDistance(
             normalize=True,
@@ -60,7 +55,7 @@ class LitDDPM(pl.LightningModule):
 
         self.inception = InceptionScore(normalize=True)
 
-    def forward(self, x_t: Tensor, t: int, noise: Optional[Tensor] = None):
+    def forward(self, x_t: Tensor, t: int):
         r"""Denoise image once using `DDPM`
 
         Args:
@@ -72,13 +67,8 @@ class LitDDPM(pl.LightningModule):
             (torch.Tensor): generated sample of shape :math:`(N, C, H, W)`
         """
 
-        if noise is None:
-            noise = gaussian_like(x_t)
-
         timestep = torch.tensor([t], device=x_t.device)
-
-        x_t = self.process.sample(self.model, x_t, timestep, noise)
-
+        x_t = self.diffusion.sampling_step(x_t, timestep)
         return x_t
 
     def training_step(self, batch, batch_idx):
@@ -86,18 +76,7 @@ class LitDDPM(pl.LightningModule):
 
         x_0: Tensor = batch[0]
 
-        batch_size: int = x_0.size(0)
-        t: Tensor = uniform_int(
-            0, self.hparams.timesteps, batch_size, device=x_0.device
-        )
-
-        noise: Tensor = gaussian_like(x_0)
-
-        x_t: Tensor = self.process.forward_process(x_0, t, noise)
-
-        noise_estimate: Tensor = self.model(x_t, t)
-
-        loss: Tensor = F.mse_loss(noise, noise_estimate)
+        loss: Tensor = self.diffusion.training_step(x_0)
         self.log("train/loss", loss)
 
         return loss
@@ -107,31 +86,22 @@ class LitDDPM(pl.LightningModule):
 
         x: Tensor = batch[0]
 
-        self.fid.update(denorm(x), real=True)
+        self.fid.update(dmme.denorm(x), real=True)
 
-        x_t: Tensor = gaussian_like(x)
-
-        x_t = self.generate(x_t)
-
-        fake_x: Tensor = denorm(x_t)
+        x_t = self.generate(x.size())
+        fake_x: Tensor = dmme.denorm(x_t)
 
         self.fid.update(fake_x, real=False)
         self.inception.update(fake_x)
 
-    def generate(self, x_t):
+    def generate(self, img_size):
         r"""Iteratively sample from :math:`p_\theta(x_{t-1}|x_t)` to generate images
 
         Args:
             x_t (torch.Tensor): :math:`x_T` to start from
         """
 
-        noise = [None]
-        for _ in range(self.hparams.timesteps, 0, -1):
-            noise.append(gaussian_like(x_t))
-
-        for t in tqdm(range(self.hparams.timesteps, 0, -1), leave=False):
-            x_t = self(x_t, t, noise[t])
-
+        x_t = self.diffusion.generate(img_size=img_size)
         return x_t
 
     def test_epoch_end(self, outputs):
@@ -147,7 +117,7 @@ class LitDDPM(pl.LightningModule):
     def configure_optimizers(self):
         """Configure optimizers for training Uses Adam and warmup lr"""
 
-        optimizer = Adam(self.model.parameters(), lr=self.hparams.lr)
+        optimizer = Adam(self.diffusion.parameters(), lr=self.hparams.lr)
         lr_scheduler = WarmupLR(optimizer, self.hparams.warmup)
 
         scheduler = {"scheduler": lr_scheduler, "interval": "step", "frequency": 1}

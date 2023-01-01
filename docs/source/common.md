@@ -1,7 +1,7 @@
 # Common
 
 ```{eval-rst}
-.. currentmodule:: dmme.common
+.. currentmodule:: dmme
 
 .. autosummary::
     :nosignatures:
