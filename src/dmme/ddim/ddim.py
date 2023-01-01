@@ -1,4 +1,5 @@
 from typing import Tuple
+
 from tqdm import tqdm
 
 import torch
@@ -8,6 +9,12 @@ from dmme.common import gaussian
 
 
 def linear_tau(timesteps, sub_timesteps):
+    """linear tau schedule
+
+    Args:
+        timesteps (int): total timesteps :math:`T`
+        sub_timesteps (int): sub sequence length less than :math:`T`
+    """
     all_t = torch.arange(0, sub_timesteps + 1)
     c = timesteps / sub_timesteps
     tau = torch.round(c * all_t).long()
@@ -15,6 +22,12 @@ def linear_tau(timesteps, sub_timesteps):
 
 
 def quadratic_tau(timesteps, sub_timesteps):
+    """quadratic tau schedule
+
+    Args:
+        timesteps (int): total timesteps :math:`T`
+        sub_timesteps (int): sub sequence length less than :math:`T`
+    """
     all_t = torch.arange(0, sub_timesteps + 1)
     c = timesteps / (timesteps**2)
     tau = torch.round(c * all_t**2).long()
@@ -24,24 +37,7 @@ def quadratic_tau(timesteps, sub_timesteps):
 def reverse_process(
     x_tau_i, alpha_bar_tau_i, alpha_bar_tau_i_minus_one, noise_in_x_tau_i
 ):
-    r"""Reverse Denoising Process
-
-    Samples :math:`x_{t-1}` from
-    :math:`p_\theta(\bold{x}_{t-1}|\bold{x}_t)
-    = \mathcal{N}(\bold{x}_{t-1};\mu_\theta(\bold{x}_t, t), \sigma_t\bold{I})`
-
-    .. math::
-        \begin{aligned}
-        \bold\mu_\theta(\bold{x}_t, t)
-        &= \frac{1}{\sqrt{\alpha_t}}\bigg(\bold{x}_t
-        -\frac{\beta_t}{\sqrt{1-\bar\alpha_t}}\epsilon_\theta(\bold{x}_t,t)\bigg) \\
-        \sigma_t &= \beta_t
-        \end{aligned}
-
-    Computes :math:`\bold{x}_{t-1}
-    = \frac{1}{\sqrt{\alpha_t}}\bigg(\bold{x}_t
-    -\frac{\beta_t}{\sqrt{1-\bar\alpha_t}}\epsilon_\theta(\bold{x}_t,t)\bigg)
-    +\sigma_t\epsilon`
+    r"""DDIM Reverse Denoising Process
 
     Args:
         model (nn.Module): model for estimating noise
@@ -116,6 +112,14 @@ class DDIM(ddpm.DDPM):
         return x_tau_i_minus_one
 
     def generate(self, img_size: Tuple[int, int, int, int]):
+        """Generate image of shape :math:`(N, C, H, W)` faster by only sampling the sub sequence
+
+        Args:
+            img_size (Tuple[int, int, int, int]): image size to generate as a tuple :math:`(N, C, H, W)`
+
+        Returns:
+            (torch.Tensor): generated image of shape :math:`(N, C, H, W)`
+        """
         x_tau_i = gaussian(img_size, device=self.beta.device)
         all_i = torch.arange(
             0,

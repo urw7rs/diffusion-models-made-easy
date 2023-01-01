@@ -6,20 +6,27 @@
 .. autosummary::
     :nosignatures:
 
+    reverse_process
+    linear_tau
+    quadratic_tau
     DDIM
     LitDDIM
 ```
 
-## Sampler
+## DDIM Sampling
 
 ```{eval-rst}
 .. currentmodule:: dmme.ddim
+
+.. autofunction:: reverse_process
+.. autofunction:: linear_tau
+.. autofunction:: quadratic_tau
 
 .. autoclass:: DDIM
     :members:
 ```
 
-## Training
+## Training Loop
 
 ``` {eval-rst}
 .. currentmodule:: dmme.ddim
