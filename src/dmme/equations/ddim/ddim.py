@@ -12,8 +12,9 @@ def linear_tau(timesteps, sub_timesteps):
     """
     all_t = torch.arange(0, sub_timesteps + 1)
     c = timesteps / sub_timesteps
-    tau = torch.round(c * all_t).long()
-    return tau
+
+    tau = torch.round(c * all_t)
+    return tau.long()
 
 
 def quadratic_tau(timesteps, sub_timesteps):
@@ -24,9 +25,10 @@ def quadratic_tau(timesteps, sub_timesteps):
         sub_timesteps (int): sub sequence length less than :math:`T`
     """
     all_t = torch.arange(0, sub_timesteps + 1)
-    c = timesteps / (timesteps**2)
-    tau = torch.round(c * all_t**2).long()
-    return tau
+    c = timesteps / (sub_timesteps**2)
+
+    tau = torch.round(c * all_t**2)
+    return tau.long()
 
 
 def reverse_process(

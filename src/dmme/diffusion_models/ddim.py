@@ -56,7 +56,6 @@ class DDIM(DDPM):
         Returns:
             (torch.Tensor): generated sample of shape :math:`(N, C, H, W)`
         """
-
         tau_i = self.tau[i]
         tau_i_minus_one = self.tau[i - 1]
 
