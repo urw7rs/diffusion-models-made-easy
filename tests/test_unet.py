@@ -1,6 +1,6 @@
 import torch
 
-from dmme.ddpm import UNet
+from dmme.models import UNet
 
 
 def test_unet():
