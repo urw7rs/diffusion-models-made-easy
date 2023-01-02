@@ -1,6 +1,7 @@
 import torch
 
-from dmme.ddpm import DDPM, UNet
+from dmme.diffusion_models import DDPM
+from dmme.models import UNet
 
 
 def test_ddpm_training():

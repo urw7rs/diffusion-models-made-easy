@@ -70,34 +70,14 @@ trainer:
   inference_mode: true
 ckpt_path: null
 model:
-  class_path: dmme.ddim.LitDDIM
+  class_path: dmme.LitDDIM
   init_args:
-    model:
-      class_path: dmme.ddpm.UNet
-      init_args:
-        in_channels: 3
-        pos_dim: 128
-        emb_dim: 512
-        num_groups: 32
-        dropout: 0.1
-        channels_per_depth:
-          - 128
-          - 256
-          - 256
-          - 256
-        num_blocks: 2
-        attention_depths:
-          - 2
-    tau_schedule: "linear"
     lr: 2e-4
     warmup: 5000
-    imgsize:
-      - 3
-      - 32
-      - 32
-    sample_steps: 50
     timesteps: 1000
     decay: 0.9999
+    sample_steps: 50
+    tau_schedule: "quadratic"
 data:
   class_path: dmme.data.CIFAR10
   init_args:

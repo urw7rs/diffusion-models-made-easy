@@ -1,7 +1,6 @@
-from typing import Tuple
+from typing import Optional
 
 import torch
-from torch import nn
 from torch import Tensor
 
 import pytorch_lightning as pl
@@ -13,8 +12,9 @@ from torch.optim import Adam
 from dmme.lr_scheduler import WarmupLR
 from dmme.callbacks import EMA
 
-from .ddpm import DDPM
-from .unet import UNet
+import dmme
+from dmme.diffusion_models import DDPM
+from dmme.models import UNet
 
 
 class LitDDPM(pl.LightningModule):
@@ -25,7 +25,6 @@ class LitDDPM(pl.LightningModule):
         lr (float): learning rate, defaults to :math:`2e-4`
         warmup (int): linearly increases learning rate for
             `warmup` steps until `lr` is reached, defaults to 5000
-        imgsize (Tuple[int, int, int]): image size in `(C, H, W)`
         timestpes (int): total timesteps for the
             forward and reverse process, :math:`T`
         decay (float): EMA decay value
@@ -33,20 +32,22 @@ class LitDDPM(pl.LightningModule):
 
     def __init__(
         self,
-        model: nn.Module,
+        diffusion_model: Optional[DDPM] = None,
         lr: float = 2e-4,
         warmup: int = 5000,
-        imgsize: Tuple[int, int, int] = (3, 32, 32),
-        timesteps: int = 1000,
         decay: float = 0.9999,
     ):
         super().__init__()
-        self.save_hyperparameters(ignore=["model"])
 
-        if model is None:
-            model = UNet(in_channels=3)
+        self.lr = lr
+        self.warmup = warmup
+        self.decay = decay
 
-        self.diffusion = DDPM(model, timesteps=timesteps)
+        if diffusion_model is None:
+            model = UNet()
+            diffusion_model = DDPM(model=model, timesteps=1000)
+
+        self.diffusion_model = diffusion_model
 
         self.fid = FrechetInceptionDistance(
             normalize=True,
@@ -68,7 +69,7 @@ class LitDDPM(pl.LightningModule):
         """
 
         timestep = torch.tensor([t], device=x_t.device)
-        x_t = self.diffusion.sampling_step(x_t, timestep)
+        x_t = self.diffusion_model.sampling_step(x_t, timestep)
         return x_t
 
     def training_step(self, batch, batch_idx):
@@ -76,7 +77,7 @@ class LitDDPM(pl.LightningModule):
 
         x_0: Tensor = batch[0]
 
-        loss: Tensor = self.diffusion.training_step(x_0)
+        loss: Tensor = self.diffusion_model.training_step(x_0)
         self.log("train/loss", loss)
 
         return loss
@@ -101,7 +102,7 @@ class LitDDPM(pl.LightningModule):
             x_t (torch.Tensor): :math:`x_T` to start from
         """
 
-        x_t = self.diffusion.generate(img_size=img_size)
+        x_t = self.diffusion_model.generate(img_size=img_size)
         return x_t
 
     def test_epoch_end(self, outputs):
@@ -117,8 +118,8 @@ class LitDDPM(pl.LightningModule):
     def configure_optimizers(self):
         """Configure optimizers for training Uses Adam and warmup lr"""
 
-        optimizer = Adam(self.diffusion.parameters(), lr=self.hparams.lr)
-        lr_scheduler = WarmupLR(optimizer, self.hparams.warmup)
+        optimizer = Adam(self.diffusion_model.parameters(), lr=self.lr)
+        lr_scheduler = WarmupLR(optimizer, self.warmup)
 
         scheduler = {"scheduler": lr_scheduler, "interval": "step", "frequency": 1}
 
@@ -126,5 +127,5 @@ class LitDDPM(pl.LightningModule):
 
     def configure_callbacks(self):
         """Configure EMA callback, will override any other EMA callback"""
-        ema_callback = EMA(decay=self.hparams.decay)
+        ema_callback = EMA(decay=self.decay)
         return ema_callback

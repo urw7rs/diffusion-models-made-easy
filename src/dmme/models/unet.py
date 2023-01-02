@@ -189,7 +189,7 @@ class UNet(nn.Module):
 
     def __init__(
         self,
-        in_channels,
+        in_channels=3,
         pos_dim=128,
         emb_dim=512,
         num_groups=32,
