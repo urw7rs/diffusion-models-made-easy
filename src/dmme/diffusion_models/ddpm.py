@@ -8,75 +8,7 @@ from torch import nn
 import einops
 
 import dmme
-
-
-def linear_schedule(timesteps: int, start=0.0001, end=0.02) -> torch.Tensor:
-    r"""constants increasing linearly from :math:`10^{-4}` to :math:`0.02`
-
-    Args:
-        timesteps (int): total timesteps
-        start (float): starting value, defaults to 0.0001
-        end (float): end value, defaults to 0.02
-    """
-
-    beta = torch.linspace(start, end, timesteps)
-    return dmme.pad(beta)
-
-
-def sample_gaussian(mean, variance, noise):
-    r"""Samples from a gaussian distribution using the reparameterization trick
-
-    Args:
-        mean (torch.Tensor): mean of the distribution
-        variance (torch.Tensor): variance of the distribution
-        noise (torch.Tensor): noise sampled from :math:`\mathcal{N}(0, I)`
-    """
-    return mean + torch.sqrt(variance) * noise
-
-
-def forward_process(image, alpha_bar_t, noise):
-    r"""Forward Process, :math:`q(x_t|x_{t-1})`
-
-    Args:
-        image (torch.Tensor): image of shape :math:`(N, C, H, W)`
-        alpha_bar_t (torch.Tensor): :math:`\bar\alpha_t` of shape :math:`(N, 1, 1, *)`
-        noise (torch.Tensor): noise sampled from standard normal distribution with the same shape as the image
-    """
-
-    mean = torch.sqrt(alpha_bar_t) * image
-    variance = 1 - alpha_bar_t
-    return sample_gaussian(mean, variance, noise)
-
-
-def reverse_process(x_t, beta_t, alpha_t, alpha_bar_t, noise_in_x_t, variance, noise):
-    r"""Reverse Denoising Process, :math:`p_\theta(x_{t-1}|x_t)`
-
-    Args:
-        beta_t (torch.Tensor): :math:`\beta_t` of shape :math:`(N, 1, 1, *)`
-        alpha_t (torch.Tensor): :math:`\alpha_t` of shape :math:`(N, 1, 1, *)`
-        alpha_bar_t (torch.Tensor): :math:`\bar\alpha_t` of shape :math:`(N, 1, 1, *)`
-        noise_in_x_t (torch.Tensor): estimated noise in :math:`x_t` predicted by a neural network
-        variance (torch.Tensor): variance of the reverse process, either learned or fixed
-        noise (torch.Tensor): noise sampled from :math:`\mathcal{N}(0, I)`
-    """
-
-    mean = (
-        1
-        / torch.sqrt(alpha_t)
-        * (x_t - beta_t / torch.sqrt(1 - alpha_bar_t) * noise_in_x_t)
-    )
-    return sample_gaussian(mean, variance, noise)
-
-
-def simple_loss(noise, estimated_noise):
-    r"""Simple Loss objective :math:`L_\text{simple}`, MSE loss between noise and predicted noise
-
-    Args:
-        noise (torch.Tensor): noise used in the forward process
-        estimated_noise (torch.Tensor): estimated noise with the same shape as :code:`noise`
-
-    """
-    return nn.functional.mse_loss(noise, estimated_noise)
+import dmme.equations as eq
 
 
 class DDPM(nn.Module):
@@ -90,13 +22,13 @@ class DDPM(nn.Module):
     alpha: torch.Tensor
     alpha_bar: torch.Tensor
 
-    def __init__(self, model, timesteps) -> None:
+    def __init__(self, model: nn.Module, timesteps: int = 1000) -> None:
         super().__init__()
 
         self.model = model
         self.timesteps = timesteps
 
-        beta = linear_schedule(timesteps)
+        beta = eq.ddpm.linear_schedule(timesteps)
         beta = einops.rearrange(beta, "t -> t 1 1 1")
 
         alpha = 1 - beta
@@ -130,10 +62,10 @@ class DDPM(nn.Module):
 
         alpha_bar_t = self.alpha_bar[time]
 
-        x_t = forward_process(x_0, alpha_bar_t, noise)
+        x_t = eq.ddpm.forward_process(x_0, alpha_bar_t, noise)
         noise_in_x_t = self.model(x_t, time)
 
-        loss = simple_loss(noise, noise_in_x_t)
+        loss = eq.ddpm.simple_loss(noise, noise_in_x_t)
         return loss
 
     def sampling_step(self, x_t, t):
@@ -157,7 +89,7 @@ class DDPM(nn.Module):
         alpha_bar_t = self.alpha_bar[t]
 
         noise_in_x_t = self.model(x_t, t)
-        x_t = reverse_process(
+        x_t = eq.ddpm.reverse_process(
             x_t,
             beta_t,
             alpha_t,

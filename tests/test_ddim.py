@@ -1,7 +1,7 @@
 import torch
 
-from dmme.ddim import DDIM
-from dmme.ddpm import UNet
+from dmme.diffusion_models import DDIM
+from dmme.models import UNet
 
 
 def test_ddim_sampling():

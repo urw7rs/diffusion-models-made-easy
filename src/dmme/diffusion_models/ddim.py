@@ -3,60 +3,16 @@ from typing import Tuple
 from tqdm import tqdm
 
 import torch
+from torch import nn
 
-from dmme import ddpm
-from dmme.common import gaussian
+from dmme import gaussian
 
+from dmme.diffusion_models import DDPM
 
-def linear_tau(timesteps, sub_timesteps):
-    """linear tau schedule
-
-    Args:
-        timesteps (int): total timesteps :math:`T`
-        sub_timesteps (int): sub sequence length less than :math:`T`
-    """
-    all_t = torch.arange(0, sub_timesteps + 1)
-    c = timesteps / sub_timesteps
-    tau = torch.round(c * all_t).long()
-    return tau
+import dmme.equations as eq
 
 
-def quadratic_tau(timesteps, sub_timesteps):
-    """quadratic tau schedule
-
-    Args:
-        timesteps (int): total timesteps :math:`T`
-        sub_timesteps (int): sub sequence length less than :math:`T`
-    """
-    all_t = torch.arange(0, sub_timesteps + 1)
-    c = timesteps / (timesteps**2)
-    tau = torch.round(c * all_t**2).long()
-    return tau
-
-
-def reverse_process(
-    x_tau_i, alpha_bar_tau_i, alpha_bar_tau_i_minus_one, noise_in_x_tau_i
-):
-    r"""DDIM Reverse Denoising Process
-
-    Args:
-        model (nn.Module): model for estimating noise
-        x_t (torch.Tensor): x_t
-        t (int): current timestep
-        noise (torch.Tensor): noise
-    """
-    predicted_x_0 = (
-        x_tau_i - torch.sqrt(1 - alpha_bar_tau_i) * noise_in_x_tau_i
-    ) / torch.sqrt(alpha_bar_tau_i)
-
-    x_tau_i_minus_one = ddpm.forward_process(
-        predicted_x_0, alpha_bar_tau_i_minus_one, noise_in_x_tau_i
-    )
-
-    return x_tau_i_minus_one
-
-
-class DDIM(ddpm.DDPM):
+class DDIM(DDPM):
     r"""Reverse process and Sampling for DDIM
 
     Args:
@@ -67,7 +23,11 @@ class DDIM(ddpm.DDPM):
     tau: torch.Tensor
 
     def __init__(
-        self, model, timesteps, sub_timesteps, tau_schedule="quadratic"
+        self,
+        model: nn.Module,
+        timesteps: int = 1000,
+        sub_timesteps: int = 50,
+        tau_schedule: str = "quadratic",
     ) -> None:
         super().__init__(model, timesteps)
 
@@ -75,23 +35,23 @@ class DDIM(ddpm.DDPM):
 
         tau_schedule = tau_schedule.lower()
         if tau_schedule == "linear":
-            tau = linear_tau(timesteps, sub_timesteps)
+            tau = eq.ddim.linear_tau(timesteps, sub_timesteps)
 
         elif tau_schedule == "quadratic":
-            tau = quadratic_tau(timesteps, sub_timesteps)
+            tau = eq.ddim.quadratic_tau(timesteps, sub_timesteps)
 
         else:
             raise NotImplementedError
 
         self.register_buffer("tau", tau, persistent=False)
 
-    def sampling_step(self, x_tau_i, i):
-        r"""Sample from :math:`p_\theta(x_{t-1}|x_t)`
+    def sampling_step(self, x_tau_i: torch.Tensor, i: torch.Tensor):
+        r"""Sample from :math:`p_\theta(x_\tau_{i-1}|x_\tau_i)`
 
         Args:
             model (nn.Module): model for estimating noise
             x_t (torch.Tensor): image of shape :math:`(N, C, H, W)`
-            t (int): starting :math:`t` to sample from
+            i (torch.Tensor): :math:`i` in :math:`\tau_i`
 
         Returns:
             (torch.Tensor): generated sample of shape :math:`(N, C, H, W)`
@@ -105,7 +65,7 @@ class DDIM(ddpm.DDPM):
 
         noise_in_x_tau_i = self.model(x_tau_i, tau_i)
 
-        x_tau_i_minus_one = reverse_process(
+        x_tau_i_minus_one = eq.ddim.reverse_process(
             x_tau_i, alpha_bar_tau_i, alpha_bar_tau_i_minus_one, noise_in_x_tau_i
         )
 
