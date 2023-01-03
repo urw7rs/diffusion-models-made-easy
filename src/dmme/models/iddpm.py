@@ -123,7 +123,7 @@ class ResBlock(nn.Module):
 
 
 class UNet(nn.Module):
-    r"""U-Net for predicting noise in images
+    r"""U-Net for predicting noise in images and learning variance
 
     Args:
         in_channels (int): input channels of image
@@ -142,10 +142,10 @@ class UNet(nn.Module):
         pos_dim=128,
         emb_dim=512,
         num_groups=32,
-        dropout=0.1,
+        dropout=0.3,
         channels_per_depth=(128, 256, 256, 256),
         num_blocks=2,
-        attention_depths=(2,),
+        attention_depths=(2, 3),
     ):
         super().__init__()
 
