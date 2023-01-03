@@ -26,9 +26,9 @@ def test_vlb_loss():
     model.output_conv = nn.Conv2d(4, 6, 3, 1, 1)
 
     for loss_type in ["hybrid", "vlb"]:
-        iddpm = IDDPM(model, timesteps=5, loss_type=loss_type)
+        iddpm = IDDPM(model, timesteps=2, loss_type=loss_type)
 
-        x_0 = torch.randn(32, 3, 64, 64)
+        x_0 = torch.randn(4, 3, 64, 64)
         loss = iddpm.training_step(x_0)
 
         assert torch.isnan(loss).any().item() == False

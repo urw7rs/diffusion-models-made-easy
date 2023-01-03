@@ -1,28 +1,15 @@
+import time
+
 import torch
 
 from torch.distributions import Normal
 
 
-from collections import namedtuple
-
-Gaussian = namedtuple("Gaussian", ["mean", "variance"])
-
-
-def gaussian_kl_divergence(q_mean, q_variance, p_mean, p_variance):
-    return (
-        torch.log(p_variance / q_variance) / 2
-        + (q_variance + (q_mean - p_mean) ** 2) / (2 * p_variance)
-        - 1 / 2
-    )
-
-
-def discrete_nll_loss(x_0, mean, variance):
-    m = Normal(mean, torch.sqrt(variance))
-
+def discrete_nll_loss(x_0, p: Normal):
     delta_minus = torch.where(x_0 > -0.999, x_0 - 1 / 255, x_0)
     delta_plus = torch.where(x_0 < 0.999, x_0 + 1 / 255, x_0)
 
-    prob = m.cdf(delta_plus) - m.cdf(delta_minus)
+    prob = p.cdf(delta_plus) - p.cdf(delta_minus)
     return -torch.log(prob)
 
 
@@ -40,7 +27,7 @@ def forward_posterior(x_t, x_0, beta_t, alpha_t, alpha_bar_t, alpha_bar_t_minus_
 
     variance = (1 - alpha_bar_t_minus_one) / (1 - alpha_bar_t) * beta_t
 
-    return Gaussian(mean, variance)
+    return Normal(mean, torch.sqrt(variance))
 
 
 def interpolate_variance(v, beta_t, beta_tilde_t):
@@ -51,8 +38,9 @@ def loss_t_minus_one(
     mean, variance, x_t, x_0, beta_t, alpha_t, alpha_bar_t, alpha_bar_t_minus_one
 ):
     q = forward_posterior(x_t, x_0, beta_t, alpha_t, alpha_bar_t, alpha_bar_t_minus_one)
-    loss_t_minus_one = gaussian_kl_divergence(q.mean, q.variance, mean, variance)
-    return loss_t_minus_one
+    p = Normal(mean, torch.sqrt(variance))
+
+    return torch.distributions.kl_divergence(q, p)
 
 
 def loss_vlb(
@@ -69,25 +57,35 @@ def loss_vlb(
 
     mean = reverse_dist_mean(x_t, noise_in_x_t, alpha_bar_t)
 
-    loss = []
+    vlb_loss = []
+
     if (t != 1).any():
         mask = t != 1
-        loss.append(
-            loss_t_minus_one(
-                mean[mask],
-                variance[mask],
-                x_t[mask],
-                x_0[mask],
-                beta_t[mask],
-                alpha_t[mask],
-                alpha_bar_t[mask],
-                alpha_bar_t_minus_one[mask],
-            )
+
+        q = forward_posterior(
+            x_t[mask],
+            x_0[mask],
+            beta_t[mask],
+            alpha_t[mask],
+            alpha_bar_t[mask],
+            alpha_bar_t_minus_one[mask],
         )
+        p = Normal(mean[mask], torch.sqrt(variance)[mask])
+
+        loss = torch.distributions.kl_divergence(q, p)
+        vlb_loss.append(loss)
 
     if (t == 1).any():
         mask = t == 1
-        loss.append(discrete_nll_loss(x_0[mask], mean[mask], variance[mask]))
 
-    vlb_loss = torch.cat(loss, dim=0).mean()
-    return vlb_loss
+        p = Normal(mean[mask], torch.sqrt(variance)[mask])
+
+        loss = discrete_nll_loss(x_0[mask], p)
+        vlb_loss.append(loss)
+
+    if len(vlb_loss) > 1:
+        vlb_loss = torch.cat(vlb_loss, dim=0)
+    else:
+        vlb_loss = vlb_loss[0]
+
+    return vlb_loss.mean()
