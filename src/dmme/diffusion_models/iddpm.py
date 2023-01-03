@@ -10,7 +10,7 @@ import dmme.equations as eq
 
 from .ddpm import DDPM
 
-NoiseVarianceOutput = namedtuple("NoiseVarianceOutput", ["noise", "variance"])
+NoiseVariance = namedtuple("NoiseVariance", ["noise", "variance"])
 
 
 class IDDPM(DDPM):
@@ -69,7 +69,7 @@ class IDDPM(DDPM):
         alpha_t = self.alpha[t]
         alpha_bar_t_minus_one = self.alpha_bar[t - 1]
 
-        noise_in_x_t, variance = self.forward_model(
+        model_output = self.forward_model(
             x_t, t, beta_t, alpha_bar_t, alpha_bar_t_minus_one
         )
 
@@ -77,8 +77,8 @@ class IDDPM(DDPM):
         if self.loss_type == "hybrid" or self.loss_type == "vlb":
 
             vlb_loss = eq.iddpm.loss_vlb(
-                noise_in_x_t,
-                variance,
+                model_output.noise,
+                model_output.variance,
                 x_t,
                 t,
                 x_0,
@@ -92,7 +92,7 @@ class IDDPM(DDPM):
                 return vlb_loss
 
         if self.loss_type == "hybrid":
-            simple_loss = eq.ddpm.simple_loss(noise, noise_in_x_t)
+            simple_loss = eq.ddpm.simple_loss(noise, model_output.noise)
 
             loss = simple_loss + self.gamma * vlb_loss
             return loss
@@ -117,7 +117,7 @@ class IDDPM(DDPM):
         alpha_t = self.alpha[t]
         alpha_bar_t = self.alpha_bar[t]
 
-        noise_in_x_t, variance = self.forward_model(
+        model_output = self.forward_model(
             x_t, t, beta_t, alpha_bar_t, self.alpha_bar[t - 1]
         )
 
@@ -126,9 +126,9 @@ class IDDPM(DDPM):
             beta_t,
             alpha_t,
             alpha_bar_t,
-            noise_in_x_t,
-            variance=variance,
-            noise=noise,
+            model_output.noise,
+            variance=model_output.variance,
+            noise=model_output.noise,
         )
         return x_t
 
@@ -138,4 +138,4 @@ class IDDPM(DDPM):
 
         beta_tilde_t = (1 - alpha_bar_t_minus_one) / (1 - alpha_bar_t) * beta_t
         variance = eq.iddpm.interpolate_variance(v, beta_t, beta_tilde_t)
-        return noise_in_x_t, variance
+        return NoiseVariance(noise_in_x_t, variance)
