@@ -24,8 +24,6 @@ class IDDPM(DDPM):
     ) -> None:
         super().__init__(model, timesteps)
 
-        self.model = model
-        self.timesteps = timesteps
         self.loss_type = loss_type
         self.gamma = gamma
 
@@ -67,17 +65,17 @@ class IDDPM(DDPM):
 
         x_t = eq.ddpm.forward_process(x_0, alpha_bar_t, noise)
 
+        beta_t = self.beta[t]
+        alpha_t = self.alpha[t]
+        alpha_bar_t_minus_one = self.alpha_bar[t - 1]
+
         model_output = self.model(x_t, t)
-        noise_in_x_t, v = model_output.chunk(2, dim=1)
+        noise_in_x_t, variance = self.parse_output(
+            model_output, beta_t, alpha_bar_t, alpha_bar_t_minus_one
+        )
 
         vlb_loss = 0
         if self.loss_type == "hybrid" or self.loss_type == "vlb":
-            beta_t = self.beta[t]
-            alpha_t = self.alpha[t]
-            alpha_bar_t_minus_one = self.alpha_bar[t - 1]
-
-            beta_tilde_t = (1 - alpha_bar_t_minus_one) / (1 - alpha_bar_t) * beta_t
-            variance = eq.iddpm.interpolate_variance(v, beta_t, beta_tilde_t)
 
             vlb_loss = eq.iddpm.loss_vlb(
                 noise_in_x_t,
@@ -99,3 +97,46 @@ class IDDPM(DDPM):
 
             loss = simple_loss + self.gamma * vlb_loss
             return loss
+
+    def sampling_step(self, x_t, t):
+        r"""Denoise image by sampling from :math:`p_\theta(x_{t-1}|x_t)`
+
+        Args:
+            model (nn.Module): model for estimating noise
+            x_t (torch.Tensor): image of shape :math:`(N, C, H, W)`
+            t (torch.Tensor): starting :math:`t` to sample from, a tensor of shape :math:`(N,)`
+
+        Returns:
+            (torch.Tensor): denoised image of shape :math:`(N, C, H, W)`
+        """
+        noise = dmme.gaussian_like(x_t)
+
+        (idx,) = torch.where(t == 1)
+        noise[idx] = 0
+
+        beta_t = self.beta[t]
+        alpha_t = self.alpha[t]
+        alpha_bar_t = self.alpha_bar[t]
+
+        model_output = self.model(x_t, t)
+        noise_in_x_t, variance = self.parse_output(
+            model_output, beta_t, alpha_bar_t, self.alpha_bar[t - 1]
+        )
+
+        x_t = eq.ddpm.reverse_process(
+            x_t,
+            beta_t,
+            alpha_t,
+            alpha_bar_t,
+            noise_in_x_t,
+            variance=variance,
+            noise=noise,
+        )
+        return x_t
+
+    def parse_output(self, model_output, beta_t, alpha_bar_t, alpha_bar_t_minus_one):
+        noise_in_x_t, v = model_output.chunk(2, dim=1)
+
+        beta_tilde_t = (1 - alpha_bar_t_minus_one) / (1 - alpha_bar_t) * beta_t
+        variance = eq.iddpm.interpolate_variance(v, beta_t, beta_tilde_t)
+        return noise_in_x_t, variance

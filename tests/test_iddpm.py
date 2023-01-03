@@ -44,6 +44,8 @@ def test_improved_ddpm_sampling():
         channels_per_depth=(4, 8, 16, 32),
         num_blocks=3,
     )
+    model.output_conv = nn.Conv2d(4, 6, 3, 1, 1)
+
     iddpm = IDDPM(model, timesteps=100)
 
     x_t = torch.randn(3, 3, 32, 32)
@@ -52,7 +54,3 @@ def test_improved_ddpm_sampling():
     output = iddpm.sampling_step(x_t, t)
 
     assert output.size() == x_t.size()
-
-
-def test_improved_ddim():
-    pass
