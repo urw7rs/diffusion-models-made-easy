@@ -1,7 +1,6 @@
 import torch
 
 from torch.distributions import Normal
-from torch.nn.functional import nll_loss
 
 from dmme.equations import Gaussian
 
