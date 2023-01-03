@@ -69,9 +69,8 @@ class IDDPM(DDPM):
         alpha_t = self.alpha[t]
         alpha_bar_t_minus_one = self.alpha_bar[t - 1]
 
-        model_output = self.model(x_t, t)
-        noise_in_x_t, variance = self.parse_output(
-            model_output, beta_t, alpha_bar_t, alpha_bar_t_minus_one
+        noise_in_x_t, variance = self.forward_model(
+            x_t, t, beta_t, alpha_bar_t, alpha_bar_t_minus_one
         )
 
         vlb_loss = 0
@@ -118,9 +117,8 @@ class IDDPM(DDPM):
         alpha_t = self.alpha[t]
         alpha_bar_t = self.alpha_bar[t]
 
-        model_output = self.model(x_t, t)
-        noise_in_x_t, variance = self.parse_output(
-            model_output, beta_t, alpha_bar_t, self.alpha_bar[t - 1]
+        noise_in_x_t, variance = self.forward_model(
+            x_t, t, beta_t, alpha_bar_t, self.alpha_bar[t - 1]
         )
 
         x_t = eq.ddpm.reverse_process(
@@ -134,7 +132,8 @@ class IDDPM(DDPM):
         )
         return x_t
 
-    def parse_output(self, model_output, beta_t, alpha_bar_t, alpha_bar_t_minus_one):
+    def forward_model(self, x_t, t, beta_t, alpha_bar_t, alpha_bar_t_minus_one):
+        model_output = self.model(x_t, t)
         noise_in_x_t, v = model_output.chunk(2, dim=1)
 
         beta_tilde_t = (1 - alpha_bar_t_minus_one) / (1 - alpha_bar_t) * beta_t
