@@ -1,6 +1,7 @@
 from typing import Optional
 
 import torch
+from torch import nn
 from torch import Tensor
 
 import pytorch_lightning as pl
@@ -14,7 +15,7 @@ from dmme.callbacks import EMA
 
 import dmme
 from dmme.diffusion_models import DDPM
-from dmme.models import UNet
+from dmme.models.ddpm import UNet
 
 
 class LitDDPM(pl.LightningModule):
@@ -36,6 +37,8 @@ class LitDDPM(pl.LightningModule):
         lr: float = 2e-4,
         warmup: int = 5000,
         decay: float = 0.9999,
+        model: Optional[nn.Module] = None,
+        timesteps: int = 1000,
     ):
         super().__init__()
 
@@ -44,8 +47,9 @@ class LitDDPM(pl.LightningModule):
         self.decay = decay
 
         if diffusion_model is None:
-            model = UNet()
-            diffusion_model = DDPM(model=model, timesteps=1000)
+            if model is None:
+                model = UNet()
+            diffusion_model = DDPM(model, timesteps)
 
         self.diffusion_model = diffusion_model
 

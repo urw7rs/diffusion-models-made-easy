@@ -1,9 +1,11 @@
 from typing import Optional
 
-from .ddpm import LitDDPM
+from torch import nn
 
 from dmme.diffusion_models import DDIM
-from dmme.models import UNet
+from dmme.models.ddpm import UNet
+
+from .ddpm import LitDDPM
 
 
 class LitDDIM(LitDDPM):
@@ -27,14 +29,16 @@ class LitDDIM(LitDDPM):
         diffusion_model: Optional[DDIM] = None,
         lr: float = 2e-4,
         warmup: int = 5000,
-        timesteps: int = 1000,
         decay: float = 0.9999,
+        model: Optional[nn.Module] = None,
+        timesteps: int = 1000,
         sample_steps: int = 50,
         tau_schedule: str = "quadratic",
     ):
 
         if diffusion_model is None:
-            model = UNet()
+            if model is None:
+                model = UNet()
             diffusion_model = DDIM(model, timesteps, sample_steps, tau_schedule)
 
         super().__init__(
