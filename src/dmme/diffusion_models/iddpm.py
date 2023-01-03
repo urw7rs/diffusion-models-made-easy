@@ -55,7 +55,7 @@ class IDDPM(DDPM):
         batch_size = x_0.size(0)
 
         t = dmme.uniform_int(
-            0,
+            1,
             self.timesteps,
             batch_size,
             device=x_0.device,
@@ -70,23 +70,32 @@ class IDDPM(DDPM):
         model_output = self.model(x_t, t)
         noise_in_x_t, v = model_output.chunk(2, dim=1)
 
-        beta_t = self.beta[t]
-        alpha_t = self.alpha[t]
-        alpha_bar_t_minus_one = self.alpha_bar[t - 1]
+        vlb_loss = 0
+        if self.loss_type == "hybrid" or self.loss_type == "vlb":
+            beta_t = self.beta[t]
+            alpha_t = self.alpha[t]
+            alpha_bar_t_minus_one = self.alpha_bar[t - 1]
 
-        vlb_loss = eq.iddpm.loss_vlb(
-            noise_in_x_t,
-            v,
-            x_t,
-            t,
-            x_0,
-            beta_t,
-            alpha_t,
-            alpha_bar_t,
-            alpha_bar_t_minus_one,
-        )
+            beta_tilde_t = (1 - alpha_bar_t_minus_one) / (1 - alpha_bar_t) * beta_t
+            variance = eq.iddpm.interpolate_variance(v, beta_t, beta_tilde_t)
 
-        simple_loss = eq.ddpm.simple_loss(noise, noise_in_x_t)
+            vlb_loss = eq.iddpm.loss_vlb(
+                noise_in_x_t,
+                variance,
+                x_t,
+                t,
+                x_0,
+                beta_t,
+                alpha_t,
+                alpha_bar_t,
+                alpha_bar_t_minus_one,
+            )
 
-        loss = simple_loss + self.gamma * vlb_loss
-        return loss
+            if self.loss_type == "vlb":
+                return vlb_loss
+
+        if self.loss_type == "hybrid":
+            simple_loss = eq.ddpm.simple_loss(noise, noise_in_x_t)
+
+            loss = simple_loss + self.gamma * vlb_loss
+            return loss
