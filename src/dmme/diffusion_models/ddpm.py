@@ -53,7 +53,7 @@ class DDPM(nn.Module):
         batch_size = x_0.size(0)
 
         time = dmme.uniform_int(
-            0,
+            1,
             self.timesteps,
             batch_size,
             device=x_0.device,
