@@ -21,24 +21,28 @@ class IDDPM(DDPM):
         offset=0.008,
         loss_type="hybrid",
         gamma=0.001,
+        schedule="cosine",
     ) -> None:
         super().__init__(model, timesteps)
 
         self.loss_type = loss_type
         self.gamma = gamma
 
-        alpha_bar = eq.iddpm.cosine_schedule(timesteps, offset)
-        alpha_bar = rearrange(alpha_bar, "t -> t 1 1 1")
+        if schedule == "cosine":
+            alpha_bar = eq.iddpm.cosine_schedule(timesteps, offset)
+            alpha_bar = rearrange(alpha_bar, "t -> t 1 1 1")
 
-        # clip values to prevent singularities at the end of the diffusion near t = T
-        beta = torch.clip(1 - alpha_bar[1:] / alpha_bar[:-1], 0, 0.999)
-        beta = dmme.pad(beta)
+            # clip values to prevent singularities at the end of the diffusion near t = T
+            beta = torch.clip(1 - alpha_bar[1:] / alpha_bar[:-1], 0, 0.999)
+            beta = dmme.pad(beta)
 
-        alpha = 1 - beta
+            alpha = 1 - beta
 
-        self.register_buffer("beta", beta, persistent=False)
-        self.register_buffer("alpha", alpha, persistent=False)
-        self.register_buffer("alpha_bar", alpha_bar, persistent=False)
+            self.register_buffer("beta", beta, persistent=False)
+            self.register_buffer("alpha", alpha, persistent=False)
+            self.register_buffer("alpha_bar", alpha_bar, persistent=False)
+        elif schedule != "linear":
+            raise NotImplementedError
 
     def training_step(self, x_0):
         r"""Computes hybrid loss for improved DDPM
