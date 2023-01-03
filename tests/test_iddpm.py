@@ -4,7 +4,7 @@ from torch import nn
 import dmme.equations as eq
 
 from dmme.diffusion_models import IDDPM
-from dmme.models import UNet
+from dmme.models.iddpm import UNet
 
 
 def test_cosine_schedule():
@@ -23,7 +23,6 @@ def test_vlb_loss():
         channels_per_depth=(4, 8, 16, 32),
         num_blocks=3,
     )
-    model.output_conv = nn.Conv2d(4, 6, 3, 1, 1)
 
     for loss_type in ["hybrid", "vlb"]:
         iddpm = IDDPM(model, timesteps=2, loss_type=loss_type)
@@ -44,7 +43,6 @@ def test_improved_ddpm_sampling():
         channels_per_depth=(4, 8, 16, 32),
         num_blocks=3,
     )
-    model.output_conv = nn.Conv2d(4, 6, 3, 1, 1)
 
     iddpm = IDDPM(model, timesteps=100)
 
