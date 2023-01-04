@@ -5,7 +5,7 @@ trainer:
     class_path: pytorch_lightning.loggers.WandbLogger
     init_args:
       project: "CIFAR10_Image_Generation"
-      name: "DDPM"
+      name: "IDDPM"
   enable_checkpointing: true
   callbacks:
     - class_path: pytorch_lightning.callbacks.ModelCheckpoint
@@ -71,9 +71,13 @@ ckpt_path: null
 model:
   class_path: dmme.LitIDDPM
   init_args:
-    lr: 2e-4
+    lr: 1e-4
     warmup: 5000
     decay: 0.9999
+    schedule: "linear"
+    timesteps: 4000
+    start: 0.000025
+    end: 0.005
 data:
   class_path: dmme.data.CIFAR10
   init_args:

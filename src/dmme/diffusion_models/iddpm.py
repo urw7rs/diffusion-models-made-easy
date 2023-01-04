@@ -21,9 +21,11 @@ class IDDPM(DDPM):
         offset=0.008,
         loss_type="hybrid",
         gamma=0.001,
-        schedule="cosine",
+        schedule: str = "cosine",
+        start: float = 0.0001,
+        end: float = 0.02,
     ) -> None:
-        super().__init__(model, timesteps)
+        super().__init__(model, timesteps, start, end)
 
         self.loss_type = loss_type
         self.gamma = gamma
@@ -142,4 +144,5 @@ class IDDPM(DDPM):
 
         beta_tilde_t = (1 - alpha_bar_t_minus_one) / (1 - alpha_bar_t) * beta_t
         variance = eq.iddpm.interpolate_variance(v, beta_t, beta_tilde_t)
+
         return NoiseVariance(noise_in_x_t, variance)

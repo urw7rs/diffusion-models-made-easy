@@ -22,13 +22,15 @@ class DDPM(nn.Module):
     alpha: torch.Tensor
     alpha_bar: torch.Tensor
 
-    def __init__(self, model: nn.Module, timesteps: int = 1000) -> None:
+    def __init__(
+        self, model: nn.Module, timesteps: int = 1000, start=0.0001, end=0.02
+    ) -> None:
         super().__init__()
 
         self.model = model
         self.timesteps = timesteps
 
-        beta = eq.ddpm.linear_schedule(timesteps)
+        beta = eq.ddpm.linear_schedule(timesteps, start, end)
         beta = einops.rearrange(beta, "t -> t 1 1 1")
 
         alpha = 1 - beta

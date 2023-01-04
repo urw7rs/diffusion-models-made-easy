@@ -16,11 +16,13 @@ class LitIDDPM(LitDDPM):
         warmup: int = 5000,
         decay: float = 0.9999,
         model: Optional[nn.Module] = None,
-        timesteps: int = 4000,
-        offset: float = 0.008,
+        timesteps: int = 1000,
         loss_type: str = "hybrid",
         gamma: float = 0.001,
         schedule: str = "cosine",
+        offset: float = 0.008,
+        start: float = 0.0001,
+        end: float = 0.02,
     ):
         if diffusion_model is None:
             if model is None:
