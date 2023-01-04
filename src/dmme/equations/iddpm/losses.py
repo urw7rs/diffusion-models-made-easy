@@ -5,25 +5,22 @@ from torch.distributions import Normal
 
 def discrete_nll_loss(x_0, p: Normal):
     F_delta_plus = torch.where(x_0 < 1, p.cdf(x_0 + 1 / 255), torch.ones_like(x_0))
-
     F_delta_minus = torch.where(x_0 > -1, p.cdf(x_0 - 1 / 255), torch.zeros_like(x_0))
 
     prob = F_delta_plus - F_delta_minus
-
     return -torch.log(prob.clamp(1e-12))
 
 
-def reverse_dist_mean(x_t, noise_in_x_t, alpha_bar_t):
+def reverse_dist_mean(x_t, noise_in_x_t, beta_t, alpha_t, alpha_bar_t):
     return (
-        1 / torch.sqrt(alpha_bar_t) * (x_t - torch.sqrt(1 - alpha_bar_t) * noise_in_x_t)
+        1
+        / torch.sqrt(alpha_t)
+        * (x_t - beta_t / torch.sqrt(1 - alpha_bar_t) * noise_in_x_t)
     )
 
 
 def forward_posterior(x_t, x_0, beta_t, alpha_t, alpha_bar_t, alpha_bar_t_minus_one):
-    mean = (
-        torch.sqrt(alpha_bar_t_minus_one) * beta_t / (1 - alpha_bar_t) * x_0
-        + torch.sqrt(alpha_t) * (1 - alpha_bar_t_minus_one) / (1 - alpha_bar_t) * x_t
-    )
+    mean = +torch.sqrt(alpha_t) * (1 - alpha_bar_t_minus_one) / (1 - alpha_bar_t) * x_t
 
     variance = (1 - alpha_bar_t_minus_one) / (1 - alpha_bar_t) * beta_t
 
@@ -49,7 +46,9 @@ def loss_vlb(
 ):
 
     # aplpy stop-gradient
-    mean = reverse_dist_mean(x_t, noise_in_x_t.clone().detach(), alpha_bar_t)
+    mean = reverse_dist_mean(
+        x_t, noise_in_x_t.clone().detach(), beta_t, alpha_t, alpha_bar_t
+    )
     std = torch.sqrt(variance)
 
     vlb_loss = []
