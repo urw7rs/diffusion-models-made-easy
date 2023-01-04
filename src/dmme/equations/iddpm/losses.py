@@ -4,11 +4,13 @@ from torch.distributions import Normal
 
 
 def discrete_nll_loss(x_0, p: Normal):
-    delta_minus = torch.where(x_0 > -0.999, x_0 - 1 / 255, x_0)
-    delta_plus = torch.where(x_0 < 0.999, x_0 + 1 / 255, x_0)
+    F_delta_plus = torch.where(x_0 < 1, p.cdf(x_0 + 1 / 255), torch.ones_like(x_0))
 
-    prob = p.cdf(delta_plus) - p.cdf(delta_minus)
-    return -torch.log(prob)
+    F_delta_minus = torch.where(x_0 > -1, p.cdf(x_0 - 1 / 255), torch.zeros_like(x_0))
+
+    prob = F_delta_plus - F_delta_minus
+
+    return -torch.log(prob.clamp(1e-12))
 
 
 def reverse_dist_mean(x_t, noise_in_x_t, alpha_bar_t):
@@ -29,16 +31,9 @@ def forward_posterior(x_t, x_0, beta_t, alpha_t, alpha_bar_t, alpha_bar_t_minus_
 
 
 def interpolate_variance(v, beta_t, beta_tilde_t):
-    return torch.exp(v * torch.log(beta_t) + (1 - v) * torch.log(beta_tilde_t + 1e-7))
-
-
-def loss_t_minus_one(
-    mean, variance, x_t, x_0, beta_t, alpha_t, alpha_bar_t, alpha_bar_t_minus_one
-):
-    q = forward_posterior(x_t, x_0, beta_t, alpha_t, alpha_bar_t, alpha_bar_t_minus_one)
-    p = Normal(mean, torch.sqrt(variance))
-
-    return torch.distributions.kl_divergence(q, p)
+    return torch.exp(
+        v * torch.log(beta_t) + (1 - v) * torch.log(beta_tilde_t.clamp(1e-12))
+    )
 
 
 def loss_vlb(
@@ -53,10 +48,11 @@ def loss_vlb(
     alpha_bar_t_minus_one,
 ):
 
-    mean = reverse_dist_mean(x_t, noise_in_x_t, alpha_bar_t)
+    # aplpy stop-gradient
+    mean = reverse_dist_mean(x_t, noise_in_x_t.clone().detach(), alpha_bar_t)
+    std = torch.sqrt(variance)
 
     vlb_loss = []
-
     if (t != 1).any():
         mask = t != 1
 
@@ -68,7 +64,7 @@ def loss_vlb(
             alpha_bar_t[mask],
             alpha_bar_t_minus_one[mask],
         )
-        p = Normal(mean[mask], torch.sqrt(variance)[mask])
+        p = Normal(mean[mask], std[mask])
 
         loss = torch.distributions.kl_divergence(q, p)
         vlb_loss.append(loss)
@@ -76,7 +72,7 @@ def loss_vlb(
     if (t == 1).any():
         mask = t == 1
 
-        p = Normal(mean[mask], torch.sqrt(variance)[mask])
+        p = Normal(mean[mask], std[mask])
 
         loss = discrete_nll_loss(x_0[mask], p)
         vlb_loss.append(loss)
