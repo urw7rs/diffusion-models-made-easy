@@ -36,7 +36,7 @@ class IDDPM(DDPM):
 
             # clip values to prevent singularities at the end of the diffusion near t = T
             beta = torch.clip(1 - alpha_bar[1:] / alpha_bar[:-1], 0, 0.999)
-            beta = dmme.pad(beta)
+            beta = dmme.pad(beta, value=1)
 
             alpha = 1 - beta
 
@@ -134,7 +134,7 @@ class IDDPM(DDPM):
             alpha_bar_t,
             model_output.noise,
             variance=model_output.variance,
-            noise=model_output.noise,
+            noise=noise,
         )
         return x_t
 
