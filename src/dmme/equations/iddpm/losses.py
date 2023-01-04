@@ -20,7 +20,7 @@ def reverse_dist_mean(x_t, noise_in_x_t, beta_t, alpha_t, alpha_bar_t):
 
 
 def forward_posterior(x_t, x_0, beta_t, alpha_t, alpha_bar_t, alpha_bar_t_minus_one):
-    mean = +torch.sqrt(alpha_t) * (1 - alpha_bar_t_minus_one) / (1 - alpha_bar_t) * x_t
+    mean =torch.sqrt(alpha_bar_t_minus_one) * beta_t / (1-alpha_bar_t) * x_0 +  torch.sqrt(alpha_t) * (1 - alpha_bar_t_minus_one) / (1 - alpha_bar_t) * x_t
 
     variance = (1 - alpha_bar_t_minus_one) / (1 - alpha_bar_t) * beta_t
 
