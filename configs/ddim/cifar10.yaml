@@ -11,6 +11,7 @@ trainer:
     - class_path: pytorch_lightning.callbacks.ModelCheckpoint
       init_args:
         save_last: true
+        every_n_train_steps: 100_000
     - class_path: pytorch_lightning.callbacks.LearningRateMonitor
     - class_path: dmme.callbacks.GenerateImage
       init_args:
