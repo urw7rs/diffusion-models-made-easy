@@ -1,4 +1,4 @@
-from typing import Callable, List
+from typing import Callable, List, Union
 
 import subprocess
 import os.path as osp
@@ -18,13 +18,15 @@ class LSUN(DataModule):
         self,
         data_dir: str = ".",
         batch_size: int = 128,
-        class_name: str = "train",
+        class_name: Union[str, List[str]] = "train",
+        imgsize=256,
         augs: List[Callable] = [TF.RandomHorizontalFlip()],
     ):
         super().__init__(batch_size)
 
         self.data_dir = data_dir
         self.class_name = class_name
+        self.imgsize = imgsize
         self.augs = augs
 
     def prepare_data(self):
@@ -53,8 +55,16 @@ class LSUN(DataModule):
     def dataset(self, augs=[]):
         return datasets.LSUN(
             root=self.data_dir,
-            classes="train",
-            transform=TF.Compose([*augs, TF.ToTensor(), norm]),
+            classes=self.class_name,
+            transform=TF.Compose(
+                [
+                    *augs,
+                    TF.Resize(size=self.imgsize),
+                    TF.CenterCrop(size=self.imgsize),
+                    TF.ToTensor(),
+                    norm,
+                ]
+            ),
         )
 
     def setup_train(self):
