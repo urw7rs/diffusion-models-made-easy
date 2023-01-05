@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "dmme"
-version = "0.0.2"
+version = "0.4.0"
 authors = [
     { name="Chanhyuk Jung", email="urw7rs@stu.kmu.ac.kr" },
 ]
@@ -16,7 +16,7 @@ dependencies = [
     "torch",
     "torchvision",
     "einops",
-    "pytorch-lightning",
+    "pytorch-lightning>=1.8",
     "jsonargparse[signatures]>=4.12.0",
     "torchmetrics[image]",
     "wandb",
@@ -28,6 +28,7 @@ dev = [
     "black",
     "flake8",
     "sphinx-autobuild",
+    "bumpver"
 ]
 docs = [
     "sphinx",
@@ -38,3 +39,18 @@ docs = [
 
 [project.urls]
 "Homepage" = "https://github.com/urw7rs/diffusion-models-made-easy"
+
+[project.scripts]
+"dmme.trainer" = "dmme.trainer:main"
+
+[tool.bumpver]
+current_version = "0.4.0"
+version_pattern = "MAJOR.MINOR.PATCH"
+commit_message = "Bump version {old_version} -> {new_version}"
+commit = true
+tag = true
+push = false
+
+[tool.bumpver.file_patterns]
+"pyproject.toml" = ['current_version = "{version}"', 'version = "{version}"']
+"src/dmme/__init__.py" = ["{version}"]

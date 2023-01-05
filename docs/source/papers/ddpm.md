@@ -4,24 +4,26 @@ In physics and chemistry, the microscopic reversibility states that
 
 > "the microscopic detailed dynamics of particles and fields is time-reversible because the microscopic equations of motion are symmetric with respect to inversion in time"
 
-This mean that if a data distribution is diffused to noise, the reverse process exists in a microscopic level.
+This means that the diffusion of particles can be reversed in a microscopic level.
 
-This is because the equations that describe the dynamics are "symmetric with respect to inversion in time".
+Assuming this principle also holds for images, we could train a neural network to learn the reverse denoising process from the diffusion process of images to noise as they are symmetric.
 
-Assuming this reverse process exists, the Denoising Diffusion Probabilistic Model generates data by gradually denoising data starting from Gaussian noise.
+This is generaly what Denoising Diffusion Probabilistic Models do, they generate data by gradually denoising data starting from Gaussian noise. 
 
-Since this principle holds for "microscopic detailed dynamics", we design a Forward Diffusion process that gradually diffuses data to Gaussian noise.
+Since this principle holds for "microscopic detailed dynamics", the Forward Diffusion process is designed so that it gradually diffuses data to Gaussian noise.
 
 In each step, we sample from a Gaussian distribution that perturbs the data. Formally, we define it as a Markov chain of Gaussians:
 
 $$
 \begin{aligned}
-q(\bx_{1:T} | \bx_0) &\defeq \prod_{t=1}^T q(\bx_t | \bx_{t-1} ), \qquad 
+q(\bx_{1:T} | \bx_0) &\defeq \prod_{t=1}^T q(\bx_t | \bx_{t-1} ), \qquad
 q(\bx_t|\bx_{t-1}) \defeq \mathcal{N}(\bx_t;\sqrt{1-\beta_t}\bx_{t-1},\beta_t \bI)
 \end{aligned}
 $$
 
-Note that we can sample $\bx_t$ for an arbitrary timestep $t# in closed form:
+> Diffusion models scale down the data with each forward process step (by a $\sqrt{1-\beta_t}$ factor) so that variance does not grow when adding noise, thus providing consistently scaled inputs to the nerual net reverse process.
+
+Note that we can sample $\bx_t$ for an arbitrary timestep $t$ in closed form:
 
 $$
 \begin{aligned}
@@ -30,7 +32,9 @@ q(\bx_t|\bx_0) &= \mathcal{N}(\bx_t; \sqrt{\bar\alpha_t}\bx_0, (1-\bar\alpha_t)\
 \end{aligned}
 $$
 
-If $\beta_t$ is small enough, the reverse process should also exist. And since the process is symmetric it should also be a Markov chain of Gaussians starting from $p(\bx_T)=\mathcal{N}(\bx_T; \bzero, \bI)$:
+$\beta_t$ is chosen to be small enough relative to data scaled to $[-1, 1]$, this ensures we are taking microscopoic steps and $T$ is chosen big enough so that the data is completely diffused to Gaussian noise. 
+
+Since the forward and reverese process is symmetric, the revere denoising process should also be a Markov chain of Gaussians starting from $p(\bx_T)=\mathcal{N}(\bx_T; \bzero, \bI)$:
 
 $$
 \begin{aligned}
@@ -39,7 +43,7 @@ $$
 \end{aligned}
 $$
 
-In order to generate data, we sample from the Standard Normal distribution then iteratively sample $p_\theta(x_{t-1}|x_t)$
+In order to generate data, we sample from the Standard Normal distribution then iteratively sample $p_\theta(x_{t-1}|x_t)$. We use a discrete decoder in the final denoising step by setting the noise to zero.
 
 For training, we optimize the variance lower bound objective from variational autoencoders.
 
@@ -106,70 +110,65 @@ $$
 
 
 ```{eval-rst}
-.. currentmodule:: dmme
+.. currentmodule:: dmme.ddpm
 
 .. autosummary::
     :nosignatures:
 
-    dmme.DDPMSampler
-    dmme.ddpm.linear_schedule
-    dmme.ddpm.UNet
-    dmme.LitDDPM
+    forward_process
+    reverse_process
+    sample_gaussian
+    linear_schedule
+    simple_loss
+    DDPM
+    UNet
+    LitDDPM
 ```
 
-## Sampler
-
-```{eval-rst}
-.. currentmodule:: dmme
-
-.. autoclass:: DDPMSampler
-    :members:
-```
+## DDPM Training and Sampling
 
 ```{eval-rst}
 .. currentmodule:: dmme.ddpm
 
+.. autoclass:: DDPM
+    :members:
+
+.. autofunction:: forward_process
+.. autofunction:: reverse_process
+.. autofunction:: sample_gaussian
 .. autofunction:: linear_schedule
+.. autofunction:: simple_loss
 ```
 
-## Model
+## U-Net for estimating noise in images
+
+```{eval-rst}
+.. currentmodule:: dmme.ddpm
+
+.. autosummary::
+    :nosignatures:
+
+    UNet
+    SinusoidalPositionEmbeddings
+    ResBlock
+    DownSample
+    UpSample
+    Attention
+```
 
 ```{eval-rst}
 .. currentmodule:: dmme.ddpm
 
 .. autoclass:: UNet
     :members:
-```
-
-```{eval-rst}
-.. currentmodule:: dmme.ddpm.unet
-
-.. autosummary::
-
-    TimeStepEmbedding
-    SinusoidalPositionEmbeddings
-    Block
-    DownSample
-    UpSample
-    Attention
-    ResBlock
-    conv2d
-```
-
-```{eval-rst}
-.. currentmodule:: dmme.ddpm.unet
-
-.. autoclass:: TimeStepEmbedding
-    :members:
 
 .. autoclass:: SinusoidalPositionEmbeddings
     :members:
 
-.. autoclass:: Block
+.. autoclass:: ResBlock
     :members:
 
-.. autoclass:: DownSample
-    :members:
+.. autofunction:: DownSample
 
 .. autoclass:: UpSample
     :members:
@@ -177,16 +176,12 @@ $$
 .. autoclass:: Attention
     :members:
 
-.. autoclass:: ResBlock
-    :members:
-
-.. autofunction:: conv2d
 ```
 
-## Training
+## Training Loop
 
 ``` {eval-rst}
-.. currentmodule:: dmme
+.. currentmodule:: dmme.ddpm
 
 .. autoclass:: LitDDPM
     :members:

@@ -10,10 +10,10 @@ import zipfile
 
 from dmme.common import norm
 
-from .dataset import Dataset
+from .data_module import DataModule
 
 
-class LSUN(Dataset):
+class LSUN(DataModule):
     def __init__(
         self,
         data_dir: str = ".",

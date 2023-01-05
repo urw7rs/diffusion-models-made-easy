@@ -2,13 +2,16 @@ from pytorch_lightning import Trainer
 
 from pytorch_lightning.loggers import WandbLogger
 
-from dmme import LitDDPM, DDPMSampler, CIFAR10
-from dmme.ddpm import UNet
+from dmme.ddpm import LitDDPM, UNet
+from dmme.data import CIFAR10
+
+from dmme.callbacks import GenerateImage
 
 
 def main():
     trainer = Trainer(
-        logger=WandbLogger(project="CIFAR10 Image Generation", name="DDPM"),
+        logger=WandbLogger(project="CIFAR10_Image_Generation", name="DDPM"),
+        callbacks=GenerateImage((3, 32, 32), timesteps=1000),
         gradient_clip_val=1.0,
         auto_select_gpus=True,
         accelerator="gpu",
@@ -17,7 +20,7 @@ def main():
     )
 
     ddpm = LitDDPM(
-        DDPMSampler(UNet(in_channels=3), timesteps=1000),
+        UNet(in_channels=3),
         lr=2e-4,
         warmup=5000,
         imgsize=(3, 32, 32),

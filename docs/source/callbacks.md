@@ -7,13 +7,13 @@
     :nosignatures:
 
     EMA
+    GenerateImage
 ```
 
-## EMA
+```{toctree}
+:caption: 'Callbacks:'
+:maxdepth: 2
 
-```{eval-rst}
-.. currentmodule:: dmme.callbacks
-
-.. autoclass:: EMA
-    :members:
+callbacks/ema
+callbacks/generate
 ```

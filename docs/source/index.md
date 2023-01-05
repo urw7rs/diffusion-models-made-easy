@@ -14,6 +14,8 @@ This library is under heavy development.
 :caption: 'Contents:'
 :maxdepth: 2
 
-ddpm
+papers
+data
 callbacks
+common
 ```

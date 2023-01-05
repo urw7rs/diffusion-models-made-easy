@@ -7,11 +7,12 @@
 # https://www.sphinx-doc.org/en/master/usage/configuration.html#project-information
 import sphinxcontrib.katex as katex
 
+from dmme import __version__
 
 project = "dmme"
 copyright = "2022, Chanhyuk Jung"
 author = "Chanhyuk Jung"
-release = "0.0.2"
+release = __version__
 
 # -- General configuration ---------------------------------------------------
 # https://www.sphinx-doc.org/en/master/usage/configuration.html#general-configuration
