@@ -1,4 +1,5 @@
 import torch
+from torch.distributions import Normal
 
 import dmme
 
@@ -11,23 +12,11 @@ def linear_schedule(timesteps: int, start=0.0001, end=0.02) -> torch.Tensor:
         start (float): starting value, defaults to 0.0001
         end (float): end value, defaults to 0.02
     """
-
     beta = torch.linspace(start, end, timesteps)
     return dmme.pad(beta)
 
 
-def sample_gaussian(mean, variance, noise):
-    r"""Samples from a gaussian distribution using the reparameterization trick
-
-    Args:
-        mean (torch.Tensor): mean of the distribution
-        variance (torch.Tensor): variance of the distribution
-        noise (torch.Tensor): noise sampled from :math:`\mathcal{N}(0, I)`
-    """
-    return mean + torch.sqrt(variance) * noise
-
-
-def forward_process(image, alpha_bar_t, noise):
+def forward_process(image, alpha_bar_t):
     r"""Forward Process, :math:`q(x_t|x_{t-1})`
 
     Args:
@@ -37,11 +26,22 @@ def forward_process(image, alpha_bar_t, noise):
     """
 
     mean = torch.sqrt(alpha_bar_t) * image
+
     variance = 1 - alpha_bar_t
-    return sample_gaussian(mean, variance, noise)
+    std = torch.sqrt(variance)
+
+    return Normal(mean, std)
 
 
-def reverse_process(x_t, beta_t, alpha_t, alpha_bar_t, noise_in_x_t, variance, noise):
+def reverse_mean(x_t, noise_in_x_t, beta_t, alpha_t, alpha_bar_t):
+    return (
+        1
+        / torch.sqrt(alpha_t)
+        * (x_t - beta_t / torch.sqrt(1 - alpha_bar_t) * noise_in_x_t)
+    )
+
+
+def reverse_process(x_t, beta_t, alpha_t, alpha_bar_t, noise_in_x_t, variance):
     r"""Reverse Denoising Process, :math:`p_\theta(x_{t-1}|x_t)`
 
     Args:
@@ -58,4 +58,5 @@ def reverse_process(x_t, beta_t, alpha_t, alpha_bar_t, noise_in_x_t, variance, n
         / torch.sqrt(alpha_t)
         * (x_t - beta_t / torch.sqrt(1 - alpha_bar_t) * noise_in_x_t)
     )
-    return sample_gaussian(mean, variance, noise)
+    std = torch.sqrt(variance)
+    return Normal(mean, std)

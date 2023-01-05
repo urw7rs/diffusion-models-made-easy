@@ -22,13 +22,15 @@ class DDPM(nn.Module):
     alpha: torch.Tensor
     alpha_bar: torch.Tensor
 
-    def __init__(self, model: nn.Module, timesteps: int = 1000) -> None:
+    def __init__(
+        self, model: nn.Module, timesteps: int = 1000, start=0.0001, end=0.02
+    ) -> None:
         super().__init__()
 
         self.model = model
         self.timesteps = timesteps
 
-        beta = eq.ddpm.linear_schedule(timesteps)
+        beta = eq.ddpm.linear_schedule(timesteps, start, end)
         beta = einops.rearrange(beta, "t -> t 1 1 1")
 
         alpha = 1 - beta
@@ -53,18 +55,20 @@ class DDPM(nn.Module):
         batch_size = x_0.size(0)
 
         time = dmme.uniform_int(
-            0,
+            1,
             self.timesteps,
             batch_size,
             device=x_0.device,
         )
-        noise = dmme.gaussian_like(x_0)
 
         alpha_bar_t = self.alpha_bar[time]
 
-        x_t = eq.ddpm.forward_process(x_0, alpha_bar_t, noise)
+        q = eq.ddpm.forward_process(x_0, alpha_bar_t)
+        x_t = q.sample()
+
         noise_in_x_t = self.model(x_t, time)
 
+        noise = (x_t - q.mean) / q.stddev
         loss = eq.ddpm.simple_loss(noise, noise_in_x_t)
         return loss
 
@@ -79,25 +83,23 @@ class DDPM(nn.Module):
         Returns:
             (torch.Tensor): denoised image of shape :math:`(N, C, H, W)`
         """
-        noise = dmme.gaussian_like(x_t)
-
-        (idx,) = torch.where(t == 1)
-        noise[idx] = 0
-
         beta_t = self.beta[t]
         alpha_t = self.alpha[t]
         alpha_bar_t = self.alpha_bar[t]
 
         noise_in_x_t = self.model(x_t, t)
-        x_t = eq.ddpm.reverse_process(
+        p = eq.ddpm.reverse_process(
             x_t,
             beta_t,
             alpha_t,
             alpha_bar_t,
             noise_in_x_t,
             variance=beta_t,
-            noise=noise,
         )
+        x_t = p.sample()
+
+        # set z to 0 when t = 1 by overwriting values
+        x_t = torch.where(t == 1, p.mean, x_t)
         return x_t
 
     def generate(self, img_size: Tuple[int, int, int, int]):
