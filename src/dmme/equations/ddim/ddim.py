@@ -46,8 +46,5 @@ def reverse_process(
         x_tau_i - torch.sqrt(1 - alpha_bar_tau_i) * noise_in_x_tau_i
     ) / torch.sqrt(alpha_bar_tau_i)
 
-    x_tau_i_minus_one = eq.ddpm.forward_process(
-        predicted_x_0, alpha_bar_tau_i_minus_one, noise_in_x_tau_i
-    )
-
-    return x_tau_i_minus_one
+    p = eq.ddpm.forward_process(predicted_x_0, alpha_bar_tau_i_minus_one)
+    return p

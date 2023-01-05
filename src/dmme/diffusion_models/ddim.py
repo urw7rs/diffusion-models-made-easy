@@ -64,11 +64,11 @@ class DDIM(DDPM):
 
         noise_in_x_tau_i = self.model(x_tau_i, tau_i)
 
-        x_tau_i_minus_one = eq.ddim.reverse_process(
+        p = eq.ddim.reverse_process(
             x_tau_i, alpha_bar_tau_i, alpha_bar_tau_i_minus_one, noise_in_x_tau_i
         )
-
-        return x_tau_i_minus_one
+        # only return mean as noise term is zero
+        return p.mean
 
     def generate(self, img_size: Tuple[int, int, int, int]):
         """Generate image of shape :math:`(N, C, H, W)` faster by only sampling the sub sequence
