@@ -1,7 +1,7 @@
 from .iddpm import cosine_schedule
 from .losses import (
     discrete_nll_loss,
-    forward_posterior,
+    true_reverse_process,
     interpolate_variance,
     loss_vlb,
 )
@@ -9,7 +9,7 @@ from .losses import (
 __all__ = [
     "cosine_schedule",
     "discrete_nll_loss",
-    "forward_posterior",
+    "true_reverse_process",
     "interpolate_variance",
     "loss_vlb",
 ]

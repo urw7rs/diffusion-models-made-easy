@@ -99,7 +99,7 @@ class DDPM(nn.Module):
         x_t = p.sample()
 
         # set z to 0 when t = 1 by overwriting values
-        x_t[t == 1] = p.mean[t == 1]
+        x_t = torch.where(t == 1, p.mean, x_t)
         return x_t
 
     def generate(self, img_size: Tuple[int, int, int, int]):

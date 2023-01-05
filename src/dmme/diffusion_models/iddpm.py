@@ -65,11 +65,10 @@ class IDDPM(DDPM):
             device=x_0.device,
         )
 
-        noise = dmme.gaussian_like(x_0)
-
         alpha_bar_t = self.alpha_bar[t]
 
-        x_t = eq.ddpm.forward_process(x_0, alpha_bar_t, noise)
+        q = eq.ddpm.forward_process(x_0, alpha_bar_t)
+        x_t = q.sample()
 
         beta_t = self.beta[t]
         alpha_t = self.alpha[t]
@@ -81,7 +80,6 @@ class IDDPM(DDPM):
 
         vlb_loss = 0
         if self.loss_type == "hybrid" or self.loss_type == "vlb":
-
             vlb_loss = eq.iddpm.loss_vlb(
                 model_output.noise,
                 model_output.variance,
@@ -98,6 +96,7 @@ class IDDPM(DDPM):
                 return vlb_loss
 
         if self.loss_type == "hybrid":
+            noise = (x_t - q.mean) / q.stddev
             simple_loss = eq.ddpm.simple_loss(noise, model_output.noise)
 
             loss = simple_loss + self.gamma * vlb_loss
@@ -114,11 +113,6 @@ class IDDPM(DDPM):
         Returns:
             (torch.Tensor): denoised image of shape :math:`(N, C, H, W)`
         """
-        noise = dmme.gaussian_like(x_t)
-
-        (idx,) = torch.where(t == 1)
-        noise[idx] = 0
-
         beta_t = self.beta[t]
         alpha_t = self.alpha[t]
         alpha_bar_t = self.alpha_bar[t]
@@ -127,15 +121,18 @@ class IDDPM(DDPM):
             x_t, t, beta_t, alpha_bar_t, self.alpha_bar[t - 1]
         )
 
-        x_t = eq.ddpm.reverse_process(
+        p = eq.ddpm.reverse_process(
             x_t,
             beta_t,
             alpha_t,
             alpha_bar_t,
             model_output.noise,
             variance=model_output.variance,
-            noise=noise,
         )
+        x_t = p.sample()
+
+        # set z to 0 when t = 1 by overwriting values
+        x_t = torch.where(t == 1, p.mean, x_t)
         return x_t
 
     def forward_model(self, x_t, t, beta_t, alpha_bar_t, alpha_bar_t_minus_one):
