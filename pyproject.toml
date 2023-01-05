@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "dmme"
-version = "0.3.3"
+version = "0.4.0"
 authors = [
     { name="Chanhyuk Jung", email="urw7rs@stu.kmu.ac.kr" },
 ]
@@ -44,7 +44,7 @@ docs = [
 "dmme.trainer" = "dmme.trainer:main"
 
 [tool.bumpver]
-current_version = "0.3.3"
+current_version = "0.4.0"
 version_pattern = "MAJOR.MINOR.PATCH"
 commit_message = "Bump version {old_version} -> {new_version}"
 commit = true
