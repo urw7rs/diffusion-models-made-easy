@@ -80,7 +80,7 @@ model:
     sample_steps: 50
     tau_schedule: "quadratic"
 data:
-  class_path: dmme.data.CIFAR10
+  class_path: dmme.CIFAR10
   init_args:
     data_dir: "."
     batch_size: 128
