@@ -10,7 +10,7 @@ setup(
     version="0.5.1-alpha0",
     description="Diffusion Models Made Easy",
     long_description=long_description,
-    long_description_content_type="text/markdown/",
+    long_description_content_type="text/markdown",
     url="https://github.com/urw7rs/diffusion-models-made-easy",
     author="Chanhyuk Jung",
     package_dir={"": "src"},
