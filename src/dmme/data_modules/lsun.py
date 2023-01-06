@@ -1,7 +1,6 @@
-from typing import Callable, List
+from typing import Callable, List, Optional
 
 import subprocess
-import os
 import os.path as osp
 
 from .. import datasets
@@ -37,13 +36,15 @@ class LSUN(DataModule):
         batch_size: int = 128,
         class_name: str = "train",
         imgsize=256,
-        augs: List[Callable] = [TF.RandomHorizontalFlip()],
+        augs: Optional[List[Callable]] = [TF.RandomHorizontalFlip()],
     ):
         super().__init__(batch_size)
 
         self.data_dir = data_dir
         self.class_name = class_name
         self.imgsize = imgsize
+        if augs is None:
+            augs = []
         self.augs = augs
 
     def prepare_data(self):
