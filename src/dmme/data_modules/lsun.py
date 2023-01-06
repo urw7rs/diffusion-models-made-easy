@@ -101,9 +101,15 @@ class LSUN(DataModule):
                 f.extractall(out_dir)
 
     def dataset(self, augs=[]):
+        classes = self.class_name
+
+        if self.class_name not in ["train", "val", "test"]:
+            if isinstance(self.class_name, str):
+                classes = [self.class_name]
+
         return datasets.LSUN(
             root=self.data_dir,
-            classes=self.classes,
+            classes=classes,
             transform=TF.Compose(
                 [
                     *augs,
