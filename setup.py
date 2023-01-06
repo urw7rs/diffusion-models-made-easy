@@ -1,9 +1,16 @@
 from setuptools import setup, find_packages
 
+from pathlib import Path
+
+this_directory = Path(__file__).parent
+long_description = (this_directory / "README.md").read_text()
+
 setup(
     name="dmme",
     version="0.5.0-alpha0",
     description="Diffusion Models Made Easy",
+    long_description=long_description,
+    long_description_content_type="text/markdown/",
     url="https://github.com/urw7rs/diffusion-models-made-easy",
     author="Chanhyuk Jung",
     package_dir={"": "src"},
