@@ -7,7 +7,7 @@ long_description = (this_directory / "README.md").read_text()
 
 setup(
     name="dmme",
-    version="0.5.1-alpha0",
+    version="0.5.2-alpha0",
     description="Diffusion Models Made Easy",
     long_description=long_description,
     long_description_content_type="text/markdown",
