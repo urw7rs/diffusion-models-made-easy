@@ -2,7 +2,7 @@ from setuptools import setup, find_packages
 
 setup(
     name="dmme",
-    version="0.4.0",
+    version="0.5.0-alpha0",
     description="Diffusion Models Made Easy",
     url="https://github.com/urw7rs/diffusion-models-made-easy",
     author="Chanhyuk Jung",

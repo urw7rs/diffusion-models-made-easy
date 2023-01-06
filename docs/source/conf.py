@@ -10,7 +10,7 @@ import sphinxcontrib.katex as katex
 project = "dmme"
 copyright = "2022, Chanhyuk Jung"
 author = "Chanhyuk Jung"
-release = "0.4.0"
+release = "0.5.0-alpha0"
 
 # -- General configuration ---------------------------------------------------
 # https://www.sphinx-doc.org/en/master/usage/configuration.html#general-configuration
