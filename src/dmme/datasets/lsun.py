@@ -17,6 +17,7 @@ class LSUNClass(VisionDataset):
         root: str,
         transform: Optional[Callable] = None,
         target_transform: Optional[Callable] = None,
+        ignore_keys: Optional[List] = None,
     ) -> None:
         import lmdb
 
@@ -39,18 +40,25 @@ class LSUNClass(VisionDataset):
             print("creating cache, this may take a while...")
 
             with self.env.begin(write=False) as txn:
-                self.keys = []
-                for key, value in txn.cursor():
-                    self.keys.append(key)
+                if ignore_keys is not None:
+                    self.keys = [
+                        key for key in txn.cursor().iternext(keys=True, values=False)
+                    ]
+                    for key in ignore_keys:
+                        self.keys.remove(key)
+                else:
+                    self.keys = []
+                    for key, value in txn.cursor():
+                        self.keys.append(key)
 
-                    try:
-                        buf = io.BytesIO()
-                        buf.write(value)
-                        Image.open(buf)
-                    except PIL.UnidentifiedImageError:
-                        # skip invalid values
-                        print(f"skipped {key}")
-                        self.keys.pop()
+                        try:
+                            buf = io.BytesIO()
+                            buf.write(value)
+                            Image.open(buf)
+                        except PIL.UnidentifiedImageError:
+                            # skip invalid values
+                            print(f"skipped {key}")
+                            self.keys.pop()
 
             pickle.dump(self.keys, open(cache_file, "wb"))
 
@@ -130,6 +138,13 @@ class LSUN(VisionDataset):
         "tv-monitor",
     ]
 
+    ignore_keys = {
+        "cat": [
+            b"05c509a12295c0725be85566680c58c81965ea63",
+            b"0ec91d487375c2663a43d463f9e5b4e34b8527aa",
+        ]
+    }
+
     def __init__(
         self,
         root: str,
@@ -153,12 +168,17 @@ class LSUN(VisionDataset):
         # for each class, create an LSUNClassDataset
         self.dbs = []
         for c in self.classes:
+            ignore_keys = None
+
             if c in self.objects:
                 root = osp.join(root, c)
+                ignore_keys = self.ignore_keys[c]
             else:
                 root = osp.join(root, f"{c}_lmdb")
 
-            self.dbs.append(LSUNClass(root=root, transform=transform))
+            self.dbs.append(
+                LSUNClass(root=root, transform=transform, ignore_keys=ignore_keys)
+            )
 
         self.indices = []
         count = 0
