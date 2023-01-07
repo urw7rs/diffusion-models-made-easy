@@ -4,7 +4,7 @@ trainer:
   logger:
     class_path: pytorch_lightning.loggers.WandbLogger
     init_args:
-      project: "LSUN_Church_outdoor_Image_Generation"
+      project: "LSUN_Cat_Image_Generation"
       name: "DDPM"
   enable_checkpointing: true
   callbacks:
