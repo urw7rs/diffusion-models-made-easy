@@ -1,8 +1,88 @@
 from typing import Any, cast, Callable, List, Optional, Tuple, Union
 
 import os.path as osp
+import io
+import pickle
+import string
 
-from torchvision.datasets import VisionDataset, LSUNClass
+import PIL
+from PIL import Image
+
+from torchvision.datasets import VisionDataset
+
+
+class LSUNClass(VisionDataset):
+    def __init__(
+        self,
+        root: str,
+        transform: Optional[Callable] = None,
+        target_transform: Optional[Callable] = None,
+        ignore_keys: Optional[List] = None,
+    ) -> None:
+        import lmdb
+
+        super().__init__(root, transform=transform, target_transform=target_transform)
+
+        self.env = lmdb.open(
+            root,
+            max_readers=1,
+            readonly=True,
+            lock=False,
+            readahead=False,
+            meminit=False,
+        )
+        with self.env.begin(write=False) as txn:
+            self.length = txn.stat()["entries"]
+        cache_file = "_cache_" + "".join(c for c in root if c in string.ascii_letters)
+        if osp.isfile(cache_file):
+            self.keys = pickle.load(open(cache_file, "rb"))
+        else:
+            print("creating cache, this may take a while...")
+
+            with self.env.begin(write=False) as txn:
+                if ignore_keys is not None:
+                    self.keys = [
+                        key for key in txn.cursor().iternext(keys=True, values=False)
+                    ]
+                    for key in ignore_keys:
+                        self.keys.remove(key)
+                else:
+                    self.keys = []
+                    for key, value in txn.cursor():
+                        self.keys.append(key)
+
+                        try:
+                            buf = io.BytesIO()
+                            buf.write(value)
+                            Image.open(buf)
+                        except PIL.UnidentifiedImageError:
+                            # skip invalid values
+                            print(f"skipped {key}")
+                            self.keys.pop()
+
+            pickle.dump(self.keys, open(cache_file, "wb"))
+
+    def __getitem__(self, index: int) -> Tuple[Any, Any]:
+        img, target = None, None
+        env = self.env
+        with env.begin(write=False) as txn:
+            imgbuf = txn.get(self.keys[index])
+
+        buf = io.BytesIO()
+        buf.write(imgbuf)
+        buf.seek(0)
+        img = Image.open(buf).convert("RGB")
+
+        if self.transform is not None:
+            img = self.transform(img)
+
+        if self.target_transform is not None:
+            target = self.target_transform(target)
+
+        return img, target
+
+    def __len__(self) -> int:
+        return len(self.keys)
 
 
 class LSUN(VisionDataset):
@@ -58,6 +138,13 @@ class LSUN(VisionDataset):
         "tv-monitor",
     ]
 
+    ignore_keys = {
+        "cat": [
+            b"05c509a12295c0725be85566680c58c81965ea63",
+            b"0ec91d487375c2663a43d463f9e5b4e34b8527aa",
+        ]
+    }
+
     def __init__(
         self,
         root: str,
@@ -81,12 +168,17 @@ class LSUN(VisionDataset):
         # for each class, create an LSUNClassDataset
         self.dbs = []
         for c in self.classes:
+            ignore_keys = None
+
             if c in self.objects:
                 root = osp.join(root, c)
+                ignore_keys = self.ignore_keys[c]
             else:
                 root = osp.join(root, f"{c}_lmdb")
 
-            self.dbs.append(LSUNClass(root=root, transform=transform))
+            self.dbs.append(
+                LSUNClass(root=root, transform=transform, ignore_keys=ignore_keys)
+            )
 
         self.indices = []
         count = 0
