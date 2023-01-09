@@ -9,6 +9,7 @@ from .ddpm import LitDDPM
 
 
 class LitIDDPM(LitDDPM):
+    """Improved Denoising Diffusion Probablistic Models"""
     def __init__(
         self,
         diffusion_model: Optional[IDDPM] = None,

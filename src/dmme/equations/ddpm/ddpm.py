@@ -33,14 +33,6 @@ def forward_process(image, alpha_bar_t):
     return Normal(mean, std)
 
 
-def reverse_mean(x_t, noise_in_x_t, beta_t, alpha_t, alpha_bar_t):
-    return (
-        1
-        / torch.sqrt(alpha_t)
-        * (x_t - beta_t / torch.sqrt(1 - alpha_bar_t) * noise_in_x_t)
-    )
-
-
 def reverse_process(x_t, beta_t, alpha_t, alpha_bar_t, noise_in_x_t, variance):
     r"""Reverse Denoising Process, :math:`p_\theta(x_{t-1}|x_t)`
 
