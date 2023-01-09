@@ -101,7 +101,6 @@ $$
 $$
 
 For small $t$, $\lambda_t$ is too large, In the paper setting $\lambda_t = 1$ improves sample quality
-
 $$
 \begin{aligned}
  L_\mathrm{simple} &\defeq \E_{t \sim \mathcal{U}(1, T), \bx_0, \bepsilon}\big[ \| \bepsilon - \bepsilon_\theta(\underbrace{\sqrt{\bar\alpha_t} \bx_0 + \sqrt{1-\bar\alpha_t}\bepsilon}_{\bx_t}, t) \|^2 \big] \\
@@ -109,73 +108,14 @@ $$
 $$
 
 
-```{eval-rst}
-.. currentmodule:: dmme.ddpm
-
-.. autosummary::
-    :nosignatures:
-
-    forward_process
-    reverse_process
-    sample_gaussian
-    linear_schedule
-    simple_loss
-    DDPM
-    UNet
-    LitDDPM
-```
 
 ## DDPM Training and Sampling
 
 ```{eval-rst}
-.. currentmodule:: dmme.ddpm
+.. currentmodule:: dmme.diffusion_models
 
 .. autoclass:: DDPM
     :members:
-
-.. autofunction:: forward_process
-.. autofunction:: reverse_process
-.. autofunction:: sample_gaussian
-.. autofunction:: linear_schedule
-.. autofunction:: simple_loss
-```
-
-## U-Net for estimating noise in images
-
-```{eval-rst}
-.. currentmodule:: dmme.ddpm
-
-.. autosummary::
-    :nosignatures:
-
-    UNet
-    SinusoidalPositionEmbeddings
-    ResBlock
-    DownSample
-    UpSample
-    Attention
-```
-
-```{eval-rst}
-.. currentmodule:: dmme.ddpm
-
-.. autoclass:: UNet
-    :members:
-
-.. autoclass:: SinusoidalPositionEmbeddings
-    :members:
-
-.. autoclass:: ResBlock
-    :members:
-
-.. autofunction:: DownSample
-
-.. autoclass:: UpSample
-    :members:
-
-.. autoclass:: Attention
-    :members:
-
 ```
 
 ## Training Loop

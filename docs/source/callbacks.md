@@ -1,4 +1,4 @@
-# Callbacks
+# dmme.callbacks
 
 ```{eval-rst}
 .. currentmodule:: dmme.callbacks

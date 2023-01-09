@@ -14,8 +14,13 @@ This library is under heavy development.
 :caption: 'Contents:'
 :maxdepth: 2
 
-papers
-data
+dmme
+lit_modules
+diffusion_models
+equations
+models
+datasets
+data_modules
 callbacks
-common
+trainer
 ```
