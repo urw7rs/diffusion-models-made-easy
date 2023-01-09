@@ -1,4 +1,4 @@
-# dmme.datasets
+# LSUN
 
 ```{eval-rst}
 .. currentmodule:: dmme.datasets
