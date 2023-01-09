@@ -1,3 +1,3 @@
-from .lsun import LSUN
+from .lsun import LSUN, LSUNClass
 
-__all__ = ["LSUN"]
+__all__ = ["LSUN", "LSUNClass"]

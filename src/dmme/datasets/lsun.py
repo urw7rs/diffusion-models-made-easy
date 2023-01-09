@@ -12,6 +12,15 @@ from torchvision.datasets import VisionDataset
 
 
 class LSUNClass(VisionDataset):
+    """LSUNClass from torchvision
+
+    Args:
+        root (str): directory containing mdb files
+        transform (Transform): transforms to apply on data, Optional
+        target_transform (Transform): transforms to apply on labels, Optional
+        ignore_keys (List): list of keys to ignore in lmdb database, some keys have empty values
+    """
+
     def __init__(
         self,
         root: str,

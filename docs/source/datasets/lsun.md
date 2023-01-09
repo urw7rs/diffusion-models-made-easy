@@ -4,8 +4,8 @@
 .. currentmodule:: dmme.datasets
 
 .. autoclass:: LSUNClass
-    :memebers:
+    :members:
 
 .. autoclass:: LSUN
-    :memebers:
+    :members:
 ```
