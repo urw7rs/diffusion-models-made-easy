@@ -1,0 +1,98 @@
+# pytorch_lightning==1.8.4.post0
+seed_everything: true
+trainer:
+  logger:
+    class_path: pytorch_lightning.loggers.WandbLogger
+    init_args:
+      project: "LSUN_Bedroom_Image_Generation"
+      name: "DDPM"
+  enable_checkpointing: true
+  callbacks:
+    - class_path: pytorch_lightning.callbacks.ModelCheckpoint
+      init_args:
+        save_last: true
+        every_n_train_steps: 100_000
+    - class_path: pytorch_lightning.callbacks.LearningRateMonitor
+    - class_path: dmme.callbacks.GenerateImage
+      init_args:
+        imgsize:
+          - 3
+          - 32
+          - 32
+        timesteps: 1000
+  default_root_dir: null
+  gradient_clip_val: 1.0
+  gradient_clip_algorithm: null
+  num_nodes: null
+  num_processes: null
+  devices: 1
+  gpus: null
+  auto_select_gpus: true
+  tpu_cores: null
+  ipus: null
+  enable_progress_bar: true
+  overfit_batches: 0.0
+  track_grad_norm: -1
+  check_val_every_n_epoch: 1
+  fast_dev_run: false
+  accumulate_grad_batches: 32
+  max_epochs: null
+  min_epochs: null
+  max_steps: 2_400_000
+  min_steps: null
+  max_time: null
+  limit_train_batches: null
+  limit_val_batches: null
+  limit_test_batches: null
+  limit_predict_batches: null
+  val_check_interval: null
+  log_every_n_steps: 50
+  accelerator: gpu
+  strategy: null
+  sync_batchnorm: false
+  precision: 16
+  enable_model_summary: true
+  num_sanity_val_steps: 2
+  resume_from_checkpoint: null
+  profiler: null
+  benchmark: true
+  deterministic: null
+  reload_dataloaders_every_n_epochs: 0
+  auto_lr_find: false
+  replace_sampler_ddp: true
+  detect_anomaly: false
+  auto_scale_batch_size: false
+  plugins: null
+  amp_backend: native
+  amp_level: null
+  move_metrics_to_cpu: false
+  multiple_trainloader_mode: max_size_cycle
+  inference_mode: true
+ckpt_path: null
+model:
+  class_path: dmme.LitDDPM
+  init_args:
+    lr: 2e-5
+    warmup: 5000
+    decay: 0.9999
+    model:
+      class_path: dmme.models.ddpm.UNet
+      init_args:
+        dropout: 0.0
+        channels_per_depth:
+          - 128
+          - 128
+          - 256
+          - 256
+          - 512
+          - 512
+        attention_depths:
+          - 5
+data:
+  class_path: dmme.LSUN
+  init_args:
+    data_dir: "."
+    batch_size: 2
+    class_name: "bedroom_train"
+    imgsize: 256
+    augs: null

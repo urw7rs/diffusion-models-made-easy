@@ -1,7 +1,7 @@
 # Common
 
 ```{eval-rst}
-.. currentmodule:: dmme.common
+.. currentmodule:: dmme
 
 .. autosummary::
     :nosignatures:
@@ -15,8 +15,6 @@
 
     make_history
 
-    set_default
-
 .. autofunction:: gaussian
 .. autofunction:: gaussian_like
 .. autofunction:: uniform_int
@@ -25,6 +23,4 @@
 .. autofunction:: denorm
 
 .. autofunction:: make_history
-
-.. autofunction:: set_default
 ```

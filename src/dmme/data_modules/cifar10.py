@@ -3,13 +3,13 @@ from typing import Callable, List, Optional
 from torchvision import datasets
 import torchvision.transforms as TF
 
-from dmme.common import norm, set_default
+from dmme.common import norm
 
-from .dataset import Dataset
+from .data_module import DataModule
 
 
-class CIFAR10(Dataset):
-    __doc__ = r"""CIFAR10 Dataset scaled to :math:`[-1, 1]`
+class CIFAR10(DataModule):
+    r"""CIFAR10 Dataset scaled to :math:`[-1, 1]`
 
     Download CIFAR10 using torchvision and apply augmentations from argument and finally scale images to :math:`[-1, 1]`
 
@@ -28,7 +28,10 @@ class CIFAR10(Dataset):
         super().__init__(batch_size)
 
         self.data_dir = data_dir
-        self.augs = set_default(augs, [TF.RandomHorizontalFlip()])
+
+        if augs is None:
+            augs = [TF.RandomHorizontalFlip()]
+        self.augs = augs
 
     def prepare_data(self):
         """Download dataset"""
