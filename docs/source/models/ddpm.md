@@ -1,4 +1,4 @@
-# U-Net for estimating noise in images
+# DDPM U-Net
 
 ```{eval-rst}
 .. currentmodule:: dmme.models.ddpm
