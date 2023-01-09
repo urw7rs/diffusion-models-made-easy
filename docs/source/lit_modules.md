@@ -1,40 +1,9 @@
 # dmme.lit_modules
 
-```{eval-rst}
-.. currentmodule:: dmme.lit_modules
+```{toctree}
+:maxdepth: 2
 
-.. autosummary::
-    :nosignatures:
-
-    LitDDPM
-    LitDDIM
-    LitIDDPM
-```
-
-## Denoising Diffusion Probabilistic Models
-
-```{eval-rst}
-.. currentmodule:: dmme.lit_modules
-
-.. autoclass:: LitDDPM
-    :members:
-```
-
-## DDIM
-
-```{eval-rst}
-.. currentmodule:: dmme.lit_modules
-
-.. autoclass:: LitDDIM
-    :members:
-```
-
-## IDDPM
-
-
-```{eval-rst}
-.. currentmodule:: dmme.lit_modules
-
-.. autoclass:: LitIDDPM
-    :members:
+lit_modules/ddpm
+lit_modules/ddim
+lit_modules/iddpm
 ```

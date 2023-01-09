@@ -1,31 +1,8 @@
 # dmme.data_modules
 
-```{eval-rst}
-.. currentmodule:: dmme.data_modules
+```{toctree}
+:maxdepth: 2
 
-.. autosummary::
-    :nosignatures:
-
-    DataModule
-    CIFAR10
-```
-
-## DataModule
-
-```{eval-rst}
-.. currentmodule:: dmme.data_modules
-
-.. autoclass:: DataModule
-    :members:
-
-.. autofunction:: cpu_count
-```
-
-## CIFAR10
-
-```{eval-rst}
-.. currentmodule:: dmme.data_modules
-
-.. autoclass:: CIFAR10
-    :members:
+data_modules/datamodule.md
+data_modules/cifar10.md
 ```

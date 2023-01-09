@@ -11,7 +11,7 @@ This library is under heavy development.
 ```
 
 ```{toctree}
-:caption: 'Contents:'
+:caption: 'API REFERENCE:'
 :maxdepth: 2
 
 dmme
