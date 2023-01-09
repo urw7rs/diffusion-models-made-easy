@@ -1,4 +1,4 @@
-# DDIM
+# LitDDIM
 
 ```{eval-rst}
 .. currentmodule:: dmme.lit_modules

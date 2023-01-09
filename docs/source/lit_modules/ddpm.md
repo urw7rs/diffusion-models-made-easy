@@ -1,4 +1,4 @@
-# Denoising Diffusion Probabilistic Models
+# LitDDPM
 
 ```{eval-rst}
 .. currentmodule:: dmme.lit_modules

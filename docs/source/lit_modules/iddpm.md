@@ -1,4 +1,4 @@
-# IDDPM
+# LitIDDPM
 
 ```{eval-rst}
 .. currentmodule:: dmme.lit_modules

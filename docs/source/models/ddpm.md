@@ -33,6 +33,4 @@
 
 .. autoclass:: Attention
     :members:
-
 ```
-
