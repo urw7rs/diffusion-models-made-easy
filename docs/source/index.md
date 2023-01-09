@@ -11,6 +11,13 @@ This library is under heavy development.
 ```
 
 ```{toctree}
+:caption: 'PAPERS:'
+:maxdepth: 2
+
+papers/ddpm
+```
+
+```{toctree}
 :caption: 'API REFERENCE:'
 :maxdepth: 2
 
