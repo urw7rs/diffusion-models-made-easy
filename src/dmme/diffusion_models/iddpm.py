@@ -14,14 +14,27 @@ NoiseVariance = namedtuple("NoiseVariance", ["noise", "variance"])
 
 
 class IDDPM(DDPM):
+    r"""Improved DDPM with cosine variance schedule and learned variance
+
+    Args:
+        model: model predicting noise from data, :math:`\epsilon_\theta(x_t, t)`
+        timesteps: total timesteps :math:`T`
+        loss_type: loss type to use either "hybrid" or "simple"
+        gamma: :math:`\gamma` in hybrid loss
+        shcedule: variance schedule to use either "linear" or "cosine"
+        offset: default offset to use if cosine schedule is used
+        start: default linear variance schedule start value
+        end: default linear variance schedule end value
+    """
+
     def __init__(
         self,
         model: nn.Module,
         timesteps: int = 1000,
-        offset=0.008,
         loss_type="hybrid",
         gamma=0.001,
         schedule: str = "cosine",
+        offset=0.008,
         start: float = 0.0001,
         end: float = 0.02,
     ) -> None:
@@ -50,10 +63,10 @@ class IDDPM(DDPM):
         r"""Computes hybrid loss for improved DDPM
 
         Args:
-            x_0 (torch.Tensor): sample image to add noise and denoise for training
+            x_0: sample image to add noise and denoise for training
 
         Returns:
-            (torch.Tensor): loss, :math:`L_\text{simple}`
+            loss, :math:`L_\text{simple}`
         """
 
         batch_size = x_0.size(0)
@@ -106,12 +119,11 @@ class IDDPM(DDPM):
         r"""Denoise image by sampling from :math:`p_\theta(x_{t-1}|x_t)`
 
         Args:
-            model (nn.Module): model for estimating noise
-            x_t (torch.Tensor): image of shape :math:`(N, C, H, W)`
-            t (torch.Tensor): starting :math:`t` to sample from, a tensor of shape :math:`(N,)`
+            x_t: image of shape :math:`(N, C, H, W)`
+            t: starting :math:`t` to sample from, a tensor of shape :math:`(N,)`
 
         Returns:
-            (torch.Tensor): denoised image of shape :math:`(N, C, H, W)`
+            denoised image of shape :math:`(N, C, H, W)`
         """
         beta_t = self.beta[t]
         alpha_t = self.alpha[t]
@@ -136,6 +148,13 @@ class IDDPM(DDPM):
         return x_t
 
     def forward_model(self, x_t, t, beta_t, alpha_bar_t, alpha_bar_t_minus_one):
+        """Applies forward to internal model
+
+        Args:
+            x: input image passed to internal model
+            t: timestep passed to internal model
+        """
+
         model_output = self.model(x_t, t)
         noise_in_x_t, v = model_output.chunk(2, dim=1)
 

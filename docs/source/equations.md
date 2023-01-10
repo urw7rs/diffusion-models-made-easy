@@ -5,4 +5,5 @@
 
 equations/ddpm
 equations/ddim
+equations/iddpm
 ```
