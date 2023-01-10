@@ -57,5 +57,6 @@ dmme.trainer fit --seed_everything 1337 \
 
 ## Supported Diffusion Models
 - [DDPM](https://arxiv.org/abs/2006.11239)
+- [DDIM](https://arxiv.org/abs/2010.02502)
 - [IDDPM](https://arxiv.org/abs/2102.09672)
 - (WIP) [Classifier Guidance](https://arxiv.org/abs/2105.05233)
