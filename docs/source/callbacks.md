@@ -1,17 +1,6 @@
-# Callbacks
-
-```{eval-rst}
-.. currentmodule:: dmme.callbacks
-
-.. autosummary::
-    :nosignatures:
-
-    EMA
-    GenerateImage
-```
+# dmme.callbacks
 
 ```{toctree}
-:caption: 'Callbacks:'
 :maxdepth: 2
 
 callbacks/ema

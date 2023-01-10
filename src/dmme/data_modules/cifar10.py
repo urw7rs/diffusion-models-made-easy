@@ -34,11 +34,9 @@ class CIFAR10(DataModule):
         self.augs = augs
 
     def prepare_data(self):
-        """Download dataset"""
         datasets.CIFAR10(root=self.data_dir, download=True)
 
     def dataset(self, augs=[]):
-        """Dataset builder"""
         return datasets.CIFAR10(
             root=self.data_dir,
             train=True,

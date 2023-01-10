@@ -1,14 +1,17 @@
+from torch import Tensor
+
 import torch
+from torch.distributions import Normal
 
 import dmme.equations as eq
 
 
-def linear_tau(timesteps, sub_timesteps):
-    """linear tau schedule
+def linear_tau(timesteps: int, sub_timesteps: int) -> Tensor:
+    r"""Linear sub-sequence :math:`\tau`
 
     Args:
-        timesteps (int): total timesteps :math:`T`
-        sub_timesteps (int): sub sequence length less than :math:`T`
+        timesteps: total timesteps :math:`T`
+        sub_timesteps: sub-sequence length less than :math:`T`
     """
     all_t = torch.arange(0, sub_timesteps + 1)
     c = timesteps / sub_timesteps
@@ -17,12 +20,12 @@ def linear_tau(timesteps, sub_timesteps):
     return tau.long()
 
 
-def quadratic_tau(timesteps, sub_timesteps):
-    """quadratic tau schedule
+def quadratic_tau(timesteps: int, sub_timesteps: int) -> Tensor:
+    r"""Quadratic sub-sequence :math:`\tau`
 
     Args:
-        timesteps (int): total timesteps :math:`T`
-        sub_timesteps (int): sub sequence length less than :math:`T`
+        timesteps: total timesteps :math:`T`
+        sub_timesteps: sub-sequence length less than :math:`T`
     """
     all_t = torch.arange(0, sub_timesteps + 1)
     c = timesteps / (sub_timesteps**2)
@@ -32,19 +35,23 @@ def quadratic_tau(timesteps, sub_timesteps):
 
 
 def reverse_process(
-    x_tau_i, alpha_bar_tau_i, alpha_bar_tau_i_minus_one, noise_in_x_tau_i
-):
-    r"""DDIM Reverse Denoising Process
+    x_t: Tensor,
+    alpha_bar_t: Tensor,
+    alpha_bar_t_minus_one: Tensor,
+    noise_in_x_t: Tensor,
+) -> Normal:
+    r"""Deterministic Denoising Process where :math:`\sigma_t = 0` for all :math:`t`
 
     Args:
-        model (nn.Module): model for estimating noise
-        x_t (torch.Tensor): x_t
-        t (int): current timestep
-        noise (torch.Tensor): noise
+        x_t: :math:`x_t`
+        alpha_bar_t: :math:`\bar\alpha_t`
+        alpha_bar_t_minus_one: :math:`\bar\alpha_{t-1}` of shape :math:`(N, 1, 1, *)`
+        noise_in_x_t: estimated noise in :math:`x_t` predicted by a neural network
     """
-    predicted_x_0 = (
-        x_tau_i - torch.sqrt(1 - alpha_bar_tau_i) * noise_in_x_tau_i
-    ) / torch.sqrt(alpha_bar_tau_i)
 
-    p = eq.ddpm.forward_process(predicted_x_0, alpha_bar_tau_i_minus_one)
+    predicted_x_0 = (x_t - torch.sqrt(1 - alpha_bar_t) * noise_in_x_t) / torch.sqrt(
+        alpha_bar_t_minus_one
+    )
+
+    p = eq.ddpm.forward_process(predicted_x_0, alpha_bar_t_minus_one)
     return p

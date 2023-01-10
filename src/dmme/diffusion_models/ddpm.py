@@ -1,4 +1,5 @@
 from typing import Tuple
+from torch import Tensor
 
 from tqdm import tqdm
 
@@ -12,18 +13,25 @@ import dmme.equations as eq
 
 
 class DDPM(nn.Module):
-    """Training and Sampling for DDPM
+    r"""Training and Sampling for DDPM
 
     Args:
-        timesteps (int): total timesteps :math:`T`
+        model: model predicting noise from data, :math:`\epsilon_\theta(x_t, t)`
+        timesteps: total timesteps :math:`T`
+        start: linear variance schedule start value
+        end: linear variance schedule end value
     """
 
-    beta: torch.Tensor
-    alpha: torch.Tensor
-    alpha_bar: torch.Tensor
+    beta: Tensor
+    alpha: Tensor
+    alpha_bar: Tensor
 
     def __init__(
-        self, model: nn.Module, timesteps: int = 1000, start=0.0001, end=0.02
+        self,
+        model: nn.Module,
+        timesteps: int = 1000,
+        start: float = 0.0001,
+        end: float = 0.02,
     ) -> None:
         super().__init__()
 
@@ -42,14 +50,14 @@ class DDPM(nn.Module):
         self.register_buffer("alpha", alpha, persistent=False)
         self.register_buffer("alpha_bar", alpha_bar, persistent=False)
 
-    def training_step(self, x_0):
-        r"""Computes loss for DDPM
+    def training_step(self, x_0: Tensor) -> Tensor:
+        r"""Training step except for optimization
 
         Args:
-            x_0 (torch.Tensor): sample image to add noise and denoise for training
+            x_0: image from dataset
 
         Returns:
-            (torch.Tensor): loss, :math:`L_\text{simple}`
+            loss, :math:`L_\text{simple}`
         """
 
         batch_size = x_0.size(0)
@@ -72,17 +80,17 @@ class DDPM(nn.Module):
         loss = eq.ddpm.simple_loss(noise, noise_in_x_t)
         return loss
 
-    def sampling_step(self, x_t, t):
+    def sampling_step(self, x_t: Tensor, t: Tensor) -> Tensor:
         r"""Denoise image by sampling from :math:`p_\theta(x_{t-1}|x_t)`
 
         Args:
-            model (nn.Module): model for estimating noise
-            x_t (torch.Tensor): image of shape :math:`(N, C, H, W)`
-            t (torch.Tensor): starting :math:`t` to sample from, a tensor of shape :math:`(N,)`
+            x_t: image of shape :math:`(N, C, H, W)`
+            t: starting :math:`t` to sample from, a tensor of shape :math:`(N,)`
 
         Returns:
-            (torch.Tensor): denoised image of shape :math:`(N, C, H, W)`
+            denoised image of shape :math:`(N, C, H, W)`
         """
+
         beta_t = self.beta[t]
         alpha_t = self.alpha[t]
         alpha_bar_t = self.alpha_bar[t]
@@ -102,14 +110,14 @@ class DDPM(nn.Module):
         x_t = torch.where(t == 1, p.mean, x_t)
         return x_t
 
-    def generate(self, img_size: Tuple[int, int, int, int]):
+    def generate(self, img_size: Tuple[int, int, int, int]) -> Tensor:
         """Generate image of shape :math:`(N, C, H, W)` by running the full denoising steps
 
         Args:
-            img_size (Tuple[int, int, int, int]): image size to generate as a tuple :math:`(N, C, H, W)`
+            img_size: image size to generate as a tuple :math:`(N, C, H, W)`
 
         Returns:
-            (torch.Tensor): generated image of shape :math:`(N, C, H, W)`
+            generated image of shape :math:`(N, C, H, W)` as a tensor
         """
 
         x_t = dmme.gaussian(img_size, device=self.beta.device)
@@ -124,8 +132,13 @@ class DDPM(nn.Module):
 
         return x_t
 
-    def forward(self, x, t):
-        """Predicts noise given image and timestep"""
+    def forward(self, x: Tensor, t: Tensor) -> Tensor:
+        """Applies forward to internal model
+
+        Args:
+            x: input image passed to internal model
+            t: timestep passed to internal model
+        """
 
         noise_in_x = self.model(x, t)
         return noise_in_x

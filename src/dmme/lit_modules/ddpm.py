@@ -1,8 +1,8 @@
 from typing import Optional
+from torch import Tensor
 
 import torch
 from torch import nn
-from torch import Tensor
 
 import pytorch_lightning as pl
 
@@ -22,24 +22,26 @@ class LitDDPM(pl.LightningModule):
     r"""LightningModule for training DDPM
 
     Args:
-        model (nn.Module): neural network predicting noise :math:`\epsilon_\theta`
-        lr (float): learning rate, defaults to :math:`2e-4`
-        warmup (int): linearly increases learning rate for
+        lr: learning rate, defaults to :code:`2e-4`
+        warmup: linearly increases learning rate for
             `warmup` steps until `lr` is reached, defaults to 5000
-        timestpes (int): total timesteps for the
-            forward and reverse process, :math:`T`
-        decay (float): EMA decay value
+        decay: EMA decay value
+
+        diffusion_model: overrides default diffusion_model :code:`DDPM`
+        model: overrides default model passed to :code:`DDPM`
+
+        timesteps: default timesteps passed to :code:`DDPM`
     """
 
     def __init__(
         self,
-        diffusion_model: Optional[DDPM] = None,
         lr: float = 2e-4,
         warmup: int = 5000,
         decay: float = 0.9999,
+        diffusion_model: Optional[DDPM] = None,
         model: Optional[nn.Module] = None,
         timesteps: int = 1000,
-    ):
+    ) -> None:
         super().__init__()
 
         self.lr = lr
@@ -64,12 +66,12 @@ class LitDDPM(pl.LightningModule):
         r"""Denoise image once using `DDPM`
 
         Args:
-            x_t (torch.Tensor): image of shape :math:`(N, C, H, W)`
+            x_t: image of shape :math:`(N, C, H, W)`
             t (int): starting :math:`t` to sample from
-            noise (torch.Tensor): noise to use for sampling, if `None` samples new noise
+            noise: noise to use for sampling, if `None` samples new noise
 
         Returns:
-            (torch.Tensor): generated sample of shape :math:`(N, C, H, W)`
+            generated sample of shape :math:`(N, C, H, W)`
         """
 
         timestep = torch.tensor([t], device=x_t.device)
@@ -100,10 +102,13 @@ class LitDDPM(pl.LightningModule):
         self.inception.update(fake_x)
 
     def generate(self, img_size):
-        r"""Iteratively sample from :math:`p_\theta(x_{t-1}|x_t)` to generate images
+        r"""Generate sample using internal diffusion_model
 
         Args:
-            x_t (torch.Tensor): :math:`x_T` to start from
+            img_size: image size to generate as a tuple :math:`(N, C, H, W)`
+
+        Returns:
+            generated image of shape :math:`(N, C, H, W)` as a tensor
         """
 
         x_t = self.diffusion_model.generate(img_size=img_size)
@@ -131,5 +136,6 @@ class LitDDPM(pl.LightningModule):
 
     def configure_callbacks(self):
         """Configure EMA callback, will override any other EMA callback"""
+
         ema_callback = EMA(decay=self.decay)
         return ema_callback
