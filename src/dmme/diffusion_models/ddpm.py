@@ -1,11 +1,10 @@
 from typing import Tuple
+from torch import Tensor
 
 from tqdm import tqdm
 
 import torch
 from torch import nn
-
-from torch import Tensor
 
 import einops
 
@@ -51,7 +50,7 @@ class DDPM(nn.Module):
         self.register_buffer("alpha", alpha, persistent=False)
         self.register_buffer("alpha_bar", alpha_bar, persistent=False)
 
-    def training_step(self, x_0: Tensor):
+    def training_step(self, x_0: Tensor) -> Tensor:
         r"""Training step except for optimization
 
         Args:
@@ -81,7 +80,7 @@ class DDPM(nn.Module):
         loss = eq.ddpm.simple_loss(noise, noise_in_x_t)
         return loss
 
-    def sampling_step(self, x_t: Tensor, t: Tensor):
+    def sampling_step(self, x_t: Tensor, t: Tensor) -> Tensor:
         r"""Denoise image by sampling from :math:`p_\theta(x_{t-1}|x_t)`
 
         Args:
@@ -111,7 +110,7 @@ class DDPM(nn.Module):
         x_t = torch.where(t == 1, p.mean, x_t)
         return x_t
 
-    def generate(self, img_size: Tuple[int, int, int, int]):
+    def generate(self, img_size: Tuple[int, int, int, int]) -> Tensor:
         """Generate image of shape :math:`(N, C, H, W)` by running the full denoising steps
 
         Args:
@@ -133,7 +132,7 @@ class DDPM(nn.Module):
 
         return x_t
 
-    def forward(self, x: Tensor, t: Tensor):
+    def forward(self, x: Tensor, t: Tensor) -> Tensor:
         """Applies forward to internal model
 
         Args:

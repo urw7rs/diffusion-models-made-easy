@@ -1,8 +1,8 @@
 from typing import Optional
+from torch import Tensor
 
 import torch
 from torch import nn
-from torch import Tensor
 
 import pytorch_lightning as pl
 
@@ -22,22 +22,23 @@ class LitDDPM(pl.LightningModule):
     r"""LightningModule for training DDPM
 
     Args:
-        diffusion_model: diffusion_model describing the forward, reverse process and trainig step.
-            If set to :code:`None` will set to default diffusion_model
         lr: learning rate, defaults to :code:`2e-4`
         warmup: linearly increases learning rate for
             `warmup` steps until `lr` is reached, defaults to 5000
-        timestpes: total timesteps for the
-            forward and reverse process, :math:`T`
         decay: EMA decay value
+
+        diffusion_model: overrides default diffusion_model :code:`DDPM`
+        model: overrides default model passed to :code:`DDPM`
+
+        timesteps: default timesteps passed to :code:`DDPM`
     """
 
     def __init__(
         self,
-        diffusion_model: Optional[DDPM] = None,
         lr: float = 2e-4,
         warmup: int = 5000,
         decay: float = 0.9999,
+        diffusion_model: Optional[DDPM] = None,
         model: Optional[nn.Module] = None,
         timesteps: int = 1000,
     ) -> None:
@@ -135,5 +136,6 @@ class LitDDPM(pl.LightningModule):
 
     def configure_callbacks(self):
         """Configure EMA callback, will override any other EMA callback"""
+
         ema_callback = EMA(decay=self.decay)
         return ema_callback

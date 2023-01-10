@@ -1,5 +1,6 @@
-import torch
 from torch import Tensor
+
+import torch
 from torch.distributions import Normal
 
 import dmme
@@ -9,9 +10,9 @@ def linear_schedule(timesteps: int, start: float = 0.0001, end: float = 0.02) ->
     r"""constants increasing linearly from :math:`10^{-4}` to :math:`0.02`
 
     Args:
-        timesteps (int): total timesteps
-        start (float): starting value, defaults to 0.0001
-        end (float): end value, defaults to 0.02
+        timesteps: total timesteps
+        start: starting value, defaults to 0.0001
+        end: end value, defaults to 0.02
 
     Returns:
         a 1d tensor representing :math:`\beta_t` indexed by :math:`t`
