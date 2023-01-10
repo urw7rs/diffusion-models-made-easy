@@ -30,7 +30,7 @@ class LitIDDPM(LitDDPM):
             if model is None:
                 model = UNet()
             diffusion_model = IDDPM(
-                model, timesteps, offset, loss_type, gamma, schedule
+                model, timesteps, offset, loss_type, gamma, schedule, start, end
             )
 
         super().__init__(lr, warmup, decay, diffusion_model)
