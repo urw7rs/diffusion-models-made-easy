@@ -132,7 +132,7 @@ class DDPM(nn.Module):
 
         return x_t
 
-    def forward_model(self, x: Tensor, t: Tensor) -> Tensor:
+    def forward(self, x: Tensor, t: Tensor) -> Tensor:
         """Applies forward to internal model
 
         Args:
