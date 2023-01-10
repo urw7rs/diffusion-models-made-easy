@@ -1,4 +1,4 @@
-# dmme.diffusion_models.ddim
+# DDIM
 
 ```{eval-rst}
 .. currentmodule:: dmme.diffusion_models

@@ -9,27 +9,28 @@ from .ddpm import LitDDPM
 
 
 class LitDDIM(LitDDPM):
-    r"""LightningModule for sampling with DDIM with :code:`LitDDPM`'s checkpoints
+    r"""LightningModule for accelerated sampling with DDIM using :code:`LitDDPM`'s checkpoints
 
     Args:
-        diffusion_model: diffusion_model describing the forward, reverse process and trainig step.
-            If set to :code:`None` will set to default diffusion_model
         lr: learning rate, defaults to :code:`2e-4`
         warmup: linearly increases learning rate for
             `warmup` steps until `lr` is reached, defaults to 5000
-        timestpes: total timesteps for the
-            forward and reverse process, :math:`T`
         decay: EMA decay value
-        sample_steps: sample steps for generation process
-        tau_schedule: tau schedule to use for generation, `"linear"` or `"quadratic"`
+
+        diffusion_model: overrides diffusion_model :code:`DDIM`
+        model: overrides model passed to :code:`DDIM`
+
+        timesteps: default timesteps passed to :code:`DDIM`
+        sample_steps: default sample steps passed to :code:`DDIM`
+        tau_schedule: default tau schedule passed to :code:`DDIM`
     """
 
     def __init__(
         self,
-        diffusion_model: Optional[DDIM] = None,
         lr: float = 2e-4,
         warmup: int = 5000,
         decay: float = 0.9999,
+        diffusion_model: Optional[DDIM] = None,
         model: Optional[nn.Module] = None,
         timesteps: int = 1000,
         sample_steps: int = 50,
