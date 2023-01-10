@@ -1,4 +1,4 @@
-# U-Net for estimating noise from Denoising Diffusion Probabilistic Models
+# U-Net from Denoising Diffusion Probabilistic Models
 
 ```{eval-rst}
 .. currentmodule:: dmme.models.ddpm
