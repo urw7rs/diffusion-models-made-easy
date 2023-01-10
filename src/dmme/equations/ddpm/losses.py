@@ -1,7 +1,8 @@
+from torch import Tensor
 from torch.nn.functional import mse_loss
 
 
-def simple_loss(noise, estimated_noise):
+def simple_loss(noise: Tensor, estimated_noise: Tensor) -> Tensor:
     r"""Simple Loss objective :math:`L_\text{simple}`, MSE loss between noise and predicted noise
 
     Args:

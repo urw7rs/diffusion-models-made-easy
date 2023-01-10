@@ -1,4 +1,5 @@
 from typing import Tuple
+from torch import Tensor
 
 from tqdm import tqdm
 
@@ -13,14 +14,20 @@ import dmme.equations as eq
 
 
 class DDIM(DDPM):
-    r"""Reverse process and Sampling for DDIM
+    r"""Denoising Diffusion Implicit Models
+
+        A more efficient class of iterative implicit probablistic models with the same training
+        procedure as DDPMs.
 
     Args:
-        timesteps (int): total timesteps :math:`T`
-        tau_schedule (str): tau schedule, `"linear"`or `"quadratic"`
+        model: model passed to :code:`DDPM`
+
+        timesteps: total timesteps :math:`T`
+        sub_timesteps: sub-sequence length
+        tau_schedule: tau schedule to use, `"linear"`or `"quadratic"`
     """
 
-    tau: torch.Tensor
+    tau: Tensor
 
     def __init__(
         self,
@@ -45,16 +52,15 @@ class DDIM(DDPM):
 
         self.register_buffer("tau", tau, persistent=False)
 
-    def sampling_step(self, x_tau_i: torch.Tensor, i: torch.Tensor):
+    def sampling_step(self, x_tau_i: Tensor, i: Tensor) -> Tensor:
         r"""Sample from :math:`p_\theta(x_\tau_{i-1}|x_\tau_i)`
 
         Args:
-            model (nn.Module): model for estimating noise
-            x_t (torch.Tensor): image of shape :math:`(N, C, H, W)`
-            i (torch.Tensor): :math:`i` in :math:`\tau_i`
+            x_tau_i: image of shape :math:`(N, C, H, W)`
+            i: :math:`i` in :math:`\tau_i`
 
         Returns:
-            (torch.Tensor): generated sample of shape :math:`(N, C, H, W)`
+            generated sample of shape :math:`(N, C, H, W)`
         """
         tau_i = self.tau[i]
         tau_i_minus_one = self.tau[i - 1]
@@ -70,15 +76,16 @@ class DDIM(DDPM):
         # only return mean as noise term is zero
         return p.mean
 
-    def generate(self, img_size: Tuple[int, int, int, int]):
+    def generate(self, img_size: Tuple[int, int, int, int]) -> Tensor:
         """Generate image of shape :math:`(N, C, H, W)` faster by only sampling the sub sequence
 
         Args:
-            img_size (Tuple[int, int, int, int]): image size to generate as a tuple :math:`(N, C, H, W)`
+            img_size: image size to generate as a tuple :math:`(N, C, H, W)`
 
         Returns:
-            (torch.Tensor): generated image of shape :math:`(N, C, H, W)`
+            generated image of shape :math:`(N, C, H, W)`
         """
+
         x_tau_i = gaussian(img_size, device=self.beta.device)
         all_i = torch.arange(
             0,

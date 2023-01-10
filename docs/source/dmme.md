@@ -1,4 +1,21 @@
-# Common
+# dmme
+
+## LightningModules
+
+```{eval-rst}
+:ref:`LitDDPM`
+
+:ref:`LitDDIM`
+
+:ref:`LitIDDPM`
+
+:ref:`DataModule`
+
+:ref:`CIFAR10`
+
+```
+
+## Common functions
 
 ```{eval-rst}
 .. currentmodule:: dmme
