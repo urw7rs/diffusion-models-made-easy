@@ -24,9 +24,9 @@ def forward_process(image: Tensor, alpha_bar_t: Tensor) -> Normal:
     r"""Forward Process, :math:`q(x_t|x_{t-1})`
 
     Args:
-        image (Tensor): image of shape :math:`(N, C, H, W)`
-        alpha_bar_t (Tensor): :math:`\bar\alpha_t` of shape :math:`(N, 1, 1, *)`
-        noise (Tensor): noise sampled from standard normal distribution with the same shape as the image
+        image: image of shape :math:`(N, C, H, W)`
+        alpha_bar_t: :math:`\bar\alpha_t` of shape :math:`(N, 1, 1, *)`
+        noise: noise sampled from standard normal distribution with the same shape as the image
 
     Returns:
         gaussian transition distirbution :math:`q(x_t|x_{t-1})`
@@ -51,15 +51,15 @@ def reverse_process(
     r"""Reverse Denoising Process, :math:`p_\theta(x_{t-1}|x_t)`
 
     Args:
-        beta_t (Tensor): :math:`\beta_t` of shape :math:`(N, 1, 1, *)`
-        alpha_t (Tensor): :math:`\alpha_t` of shape :math:`(N, 1, 1, *)`
-        alpha_bar_t (Tensor): :math:`\bar\alpha_t` of shape :math:`(N, 1, 1, *)`
-        noise_in_x_t (Tensor): estimated noise in :math:`x_t` predicted by a neural network
-        variance (Tensor): variance of the reverse process, either learned or fixed
-        noise (Tensor): noise sampled from :math:`\mathcal{N}(0, I)`
+        beta_t: :math:`\beta_t` of shape :math:`(N, 1, 1, *)`
+        alpha_t: :math:`\alpha_t` of shape :math:`(N, 1, 1, *)`
+        alpha_bar_t: :math:`\bar\alpha_t` of shape :math:`(N, 1, 1, *)`
+        noise_in_x_t: estimated noise in :math:`x_t` predicted by a neural network
+        variance: variance of the reverse process, either learned or fixed
+        noise: noise sampled from :math:`\mathcal{N}(0, I)`
 
     Returns:
-        (torch.distributions.Normal) denoising distirbution :math:`q(x_t|x_{t-1})`
+        denoising distirbution :math:`q(x_t|x_{t-1})`
     """
 
     mean = (
