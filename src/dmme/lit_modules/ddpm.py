@@ -64,12 +64,12 @@ class LitDDPM(pl.LightningModule):
         r"""Denoise image once using `DDPM`
 
         Args:
-            x_t (torch.Tensor): image of shape :math:`(N, C, H, W)`
+            x_t: image of shape :math:`(N, C, H, W)`
             t (int): starting :math:`t` to sample from
-            noise (torch.Tensor): noise to use for sampling, if `None` samples new noise
+            noise: noise to use for sampling, if `None` samples new noise
 
         Returns:
-            (torch.Tensor): generated sample of shape :math:`(N, C, H, W)`
+            generated sample of shape :math:`(N, C, H, W)`
         """
 
         timestep = torch.tensor([t], device=x_t.device)
@@ -100,10 +100,13 @@ class LitDDPM(pl.LightningModule):
         self.inception.update(fake_x)
 
     def generate(self, img_size):
-        r"""Iteratively sample from :math:`p_\theta(x_{t-1}|x_t)` to generate images
+        r"""Generate sample using internal diffusion_model
 
         Args:
-            x_t (torch.Tensor): :math:`x_T` to start from
+            img_size: image size to generate as a tuple :math:`(N, C, H, W)`
+
+        Returns:
+            generated image of shape :math:`(N, C, H, W)` as a tensor
         """
 
         x_t = self.diffusion_model.generate(img_size=img_size)
