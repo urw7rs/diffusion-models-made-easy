@@ -10,6 +10,7 @@ from .ddpm import LitDDPM
 
 class LitIDDPM(LitDDPM):
     """Improved Denoising Diffusion Probablistic Models"""
+
     def __init__(
         self,
         diffusion_model: Optional[IDDPM] = None,
@@ -32,4 +33,4 @@ class LitIDDPM(LitDDPM):
                 model, timesteps, offset, loss_type, gamma, schedule
             )
 
-        super().__init__(diffusion_model, lr, warmup, decay)
+        super().__init__(lr, warmup, decay, diffusion_model)

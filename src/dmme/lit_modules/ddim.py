@@ -42,9 +42,4 @@ class LitDDIM(LitDDPM):
                 model = UNet()
             diffusion_model = DDIM(model, timesteps, sample_steps, tau_schedule)
 
-        super().__init__(
-            diffusion_model=diffusion_model,
-            lr=lr,
-            warmup=warmup,
-            decay=decay,
-        )
+        super().__init__(lr, warmup, decay, diffusion_model)
