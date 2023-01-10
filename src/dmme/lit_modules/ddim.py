@@ -12,16 +12,16 @@ class LitDDIM(LitDDPM):
     r"""LightningModule for sampling with DDIM with :code:`LitDDPM`'s checkpoints
 
     Args:
-        model (nn.Module): neural network predicting noise :math:`\epsilon_\theta`
-        lr (float): learning rate, defaults to :math:`2e-4`
-        warmup (int): linearly increases learning rate for
+        diffusion_model: diffusion_model describing the forward, reverse process and trainig step.
+            If set to :code:`None` will set to default diffusion_model
+        lr: learning rate, defaults to :code:`2e-4`
+        warmup: linearly increases learning rate for
             `warmup` steps until `lr` is reached, defaults to 5000
-        imgsize (Tuple[int, int, int]): image size in `(C, H, W)`
-        timestpes (int): total timesteps for the
+        timestpes: total timesteps for the
             forward and reverse process, :math:`T`
-        decay (float): EMA decay value
-        sample_steps (int): sample steps for generation process
-        tau_schedule (str): tau schedule to use for generation, `"linear"` or `"quadratic"`
+        decay: EMA decay value
+        sample_steps: sample steps for generation process
+        tau_schedule: tau schedule to use for generation, `"linear"` or `"quadratic"`
     """
 
     def __init__(
