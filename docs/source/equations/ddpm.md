@@ -10,10 +10,6 @@
     forward_process
     reverse_process
     simple_loss
-```
-
-```{eval-rst}
-.. currentmodule:: dmme.equations.ddpm
 
 .. autofunction:: linear_schedule
 .. autofunction:: forward_process

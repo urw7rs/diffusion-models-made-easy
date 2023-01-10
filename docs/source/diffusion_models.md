@@ -5,4 +5,5 @@
 
 diffusion_models/ddpm
 diffusion_models/ddim
+diffusion_models/iddpm
 ```
