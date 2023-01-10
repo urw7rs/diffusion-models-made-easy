@@ -22,13 +22,14 @@ class LitDDPM(pl.LightningModule):
     r"""LightningModule for training DDPM
 
     Args:
-        model (nn.Module): neural network predicting noise :math:`\epsilon_\theta`
-        lr (float): learning rate, defaults to :math:`2e-4`
-        warmup (int): linearly increases learning rate for
+        diffusion_model: diffusion_model describing the forward, reverse process and trainig step.
+            If set to :code:`None` will set to default diffusion_model
+        lr: learning rate, defaults to :code:`2e-4`
+        warmup: linearly increases learning rate for
             `warmup` steps until `lr` is reached, defaults to 5000
-        timestpes (int): total timesteps for the
+        timestpes: total timesteps for the
             forward and reverse process, :math:`T`
-        decay (float): EMA decay value
+        decay: EMA decay value
     """
 
     def __init__(
@@ -39,7 +40,7 @@ class LitDDPM(pl.LightningModule):
         decay: float = 0.9999,
         model: Optional[nn.Module] = None,
         timesteps: int = 1000,
-    ):
+    ) -> None:
         super().__init__()
 
         self.lr = lr
