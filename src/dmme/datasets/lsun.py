@@ -14,6 +14,8 @@ from torchvision.datasets import VisionDataset
 class LSUNClass(VisionDataset):
     """LSUNClass from torchvision
 
+    Loads lmdb dataset with empty value checks.
+
     Args:
         root (str): directory containing mdb files
         transform (Transform): transforms to apply on data, Optional
