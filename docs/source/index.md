@@ -10,6 +10,7 @@ This library is under heavy development.
 :maxdepth: 2
 
 papers/ddpm
+papers/ddim
 ```
 
 ```{toctree}
