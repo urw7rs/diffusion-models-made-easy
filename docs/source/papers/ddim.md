@@ -44,6 +44,8 @@ $$
 \end{aligned}
 $$
 
+which is also Gaussian. Unlike the diffusion process in DDPMs, the forward process here is no longer Markovian, since $\vx_t$ could depend on both $\vx_{t-1}$ and $\vx_0$. The magnitude of $\sigma$ controls how stochastic the forward process is; when $\sigma \to \vzero$, we reach an extreme case where the process becomes deterministic.
+
 ## Generative Process
 
 Recall that $q_\sigma(\vx_{T} | \vx_0) = \gN(\sqrt{\alpha_T} \vx_0, (1 - \alpha_T) \mI)$. 
