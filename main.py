@@ -158,53 +158,25 @@ class UNet(nn.Module):
         return x
 
 
+def train(key, batch_size, height, width, channels):
+    key, subkey = random.split(key)
+
+    unet = UNet(
+        in_channels=3,
+        pos_dim=128,
+        emb_dim=512,
+        drop_rate=0.1,
+        channels_per_depth=(128, 256, 256, 256),
+        num_blocks=2,
+        attention_depths=(2,),
+    )
+
+    dummy_x = jnp.empty((batch_size, height, width, channels))
+    dummy_t = jnp.empty((batch_size,))
+    variables = unet.init(subkey, dummy_x, dummy_t, training=False)
+
+
 if __name__ == "__main__":
-    B = 32
-    H = W = 32
-    C = 32
+    key = random.PRNGKey(0)
 
-    x = jnp.empty((B, H, W, C))
-    t = jnp.empty((B, 128))
-
-    root_key = random.PRNGKey(0)
-    main_key, params_key, dropout_key = jax.random.split(key=root_key, num=3)
-
-    resblock = ResBlock(128, 512, 0.5, True)
-
-    variables = resblock.init(params_key, x, t, training=False)
-    params = variables["params"]
-
-    key, _ = random.split(root_key)
-    x = random.normal(key, shape=(B, H, W, C))
-    t = random.normal(key, shape=(B, 128))
-
-    resblock_jitted = jax.jit(
-        lambda x, t: resblock.apply(
-            {"params": params}, x, t, training=True, rngs={"dropout": dropout_key}
-        )
-    )
-
-    resblock_jitted(x, t)
-
-    key, _ = random.split(key)
-    t = random.normal(key, shape=(B,))
-
-    embed_jitted = jax.jit(lambda t: embed(t, dim=512))
-
-    embed_jitted(t)
-
-    x = random.normal(key, shape=(B, H, W, 3))
-    t = random.normal(key, shape=(B,))
-
-    unet = UNet(3, 128, 512, 0.1, (128, 256, 256, 256), 2, (2,))
-
-    variables = unet.init(params_key, x, t, training=False)
-    params = variables["params"]
-
-    unet_jitted = jax.jit(
-        lambda x, t: unet.apply(
-            {"params": params}, x, t, training=True, rngs={"dropout": dropout_key}
-        )
-    )
-
-    unet_jitted(x, t)
+    train(key, batch_size=128, height=32, width=32, channels=3)
