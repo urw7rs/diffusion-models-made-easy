@@ -1,4 +1,4 @@
-from typing import Any, Tuple
+from typing import Tuple
 import functools
 
 import jax
@@ -10,30 +10,6 @@ from flax import linen as nn
 from einops.layers.flax import Rearrange
 
 
-class DownSample(nn.Module):
-    features: int
-
-    @nn.compact
-    def __call__(self, x: jnp.ndarray) -> jnp.ndarray:
-        x = nn.Conv(self.features, kernel_size=(3, 3), strides=(2, 2), padding=1)(x)
-        return x
-
-
-class UpSample(nn.Module):
-    features: int
-    factor: int
-
-    @nn.compact
-    def __call__(self, x: jnp.ndarray) -> jnp.ndarray:
-        B, H, W, C = x.shape
-
-        x = jax.image.resize(
-            x, shape=(B, H * self.factor, W * self.factor, C), method="nearest"
-        )
-        x = nn.Conv(self.features, kernel_size=(3, 3), padding="same")(x)
-        return x
-
-
 class ResBlock(nn.Module):
     features: int
     emb_dim: int
@@ -41,7 +17,7 @@ class ResBlock(nn.Module):
     with_attention: bool
 
     @nn.compact
-    def __call__(self, x, t, training: bool) -> Any:
+    def __call__(self, x, t, training: bool):
         residual = x
         Conv3x3 = functools.partial(
             nn.Conv, features=self.features, kernel_size=(3, 3), padding="same"
@@ -143,7 +119,10 @@ class UNet(nn.Module):
                 feature_maps.append(x)
 
             if depth < max_depth:
-                x = DownSample(channels)(x)
+                # downsample
+                x = nn.Conv(
+                    features=channels, kernel_size=(3, 3), strides=(2, 2), padding=1
+                )(x)
                 feature_maps.append(x)
 
         # middle
@@ -165,7 +144,11 @@ class UNet(nn.Module):
                 )
 
             if depth > 1:
-                x = UpSample(channels, factor=2)(x)
+                # upsample
+                B, H, W, C = x.shape
+
+                x = jax.image.resize(x, shape=(B, H * 2, W * 2, C), method="nearest")
+                x = Conv3x3(features=channels)(x)
 
         # output conv
         x = nn.GroupNorm()(x)
@@ -176,77 +159,52 @@ class UNet(nn.Module):
 
 
 if __name__ == "__main__":
-    B = 4
+    B = 32
     H = W = 32
     C = 32
+
     x = jnp.empty((B, H, W, C))
     t = jnp.empty((B, 128))
 
     root_key = random.PRNGKey(0)
     main_key, params_key, dropout_key = jax.random.split(key=root_key, num=3)
 
-    unet = ResBlock(128, 512, 0.5, True)
+    resblock = ResBlock(128, 512, 0.5, True)
 
-    variables = unet.init(params_key, x, t, training=False)
+    variables = resblock.init(params_key, x, t, training=False)
     params = variables["params"]
 
     key, _ = random.split(root_key)
     x = random.normal(key, shape=(B, H, W, C))
     t = random.normal(key, shape=(B, 128))
 
-    def forward(x, t):
-        y = unet.apply(
+    resblock_jitted = jax.jit(
+        lambda x, t: resblock.apply(
             {"params": params}, x, t, training=True, rngs={"dropout": dropout_key}
         )
-        return y
+    )
 
-    model = jax.jit(forward)
-
-    model(x, t)
-
-    down = DownSample(32)
-    variables = down.init(params_key, x)
-    params = variables["params"]
-
-    def forward(x):
-        y = down.apply({"params": params}, x)
-
-    model = jax.jit(forward)
-
-    model(x)
-
-    up = UpSample(32, 2)
-    variables = up.init(params_key, x)
-    params = variables["params"]
-
-    def forward(x):
-        y = up.apply({"params": params}, x)
-
-    model = jax.jit(forward)
-
-    model(x)
+    resblock_jitted(x, t)
 
     key, _ = random.split(key)
     t = random.normal(key, shape=(B,))
 
-    def forward(t):
-        y = embed(t, 512)
+    embed_jitted = jax.jit(lambda t: embed(t, dim=512))
 
-    model = jax.jit(forward)
-
-    model(t)
+    embed_jitted(t)
 
     x = random.normal(key, shape=(B, H, W, 3))
     t = random.normal(key, shape=(B,))
+
     unet = UNet(3, 128, 512, 0.1, (128, 256, 256, 256), 2, (2,))
+
     variables = unet.init(params_key, x, t, training=False)
     params = variables["params"]
 
-    def forward(x, t):
-        y = unet.apply(
+    unet_jitted = jax.jit(
+        lambda x, t: unet.apply(
             {"params": params}, x, t, training=True, rngs={"dropout": dropout_key}
         )
+    )
 
-    model = jax.jit(forward)
-
-    model(x, t)
+    unet_jitted(x, t)
