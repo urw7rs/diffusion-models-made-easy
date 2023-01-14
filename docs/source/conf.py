@@ -10,7 +10,7 @@ import sphinxcontrib.katex as katex
 project = "dmme"
 copyright = "2022, Chanhyuk Jung"
 author = "Chanhyuk Jung"
-release = "0.5.2-alpha0"
+release = "0.5.2-beta0"
 
 # -- General configuration ---------------------------------------------------
 # https://www.sphinx-doc.org/en/master/usage/configuration.html#general-configuration
@@ -31,18 +31,25 @@ myst_enable_extensions = ["dollarmath"]
 autodoc_member_order = "bysource"
 
 latex_macros = r"""
-    \def \E                     {\mathbb{E}}
-    \def \Ea                  #1{\E\left[#1\right]}
-    \def \Eb                #1#2{\E_{#1}{\!\left[#2\right]}}
+    \def \bb                    #1{{\mathbb{#1}}}
     \def \bepsilon              {\boldsymbol{\epsilon}}
     \def \bmu                   {\boldsymbol{\mu}}
     \def \bx                    {\boldsymbol{x}}
-    \def \vx                    {\boldsymbol{x}}
-    \def \bSigma                {\boldsymbol{\Sigma}}
-    \def \bI                    {\boldsymbol{I}}
     \def \bzero                 {\boldsymbol{0}}
+    \def \bI                    {\boldsymbol{I}}
+    \def \bSigma                {\boldsymbol{\Sigma}}
     \def \defeq                 {\coloneqq}
+    \def \E                     {\mathbb{E}}
+    \def \Ea                  #1{\E\left[#1\right]}
+    \def \Eb                #1#2{\E_{#1}{\!\left[#2\right]}}
+    \def \gQ                    {\mathcal{Q}}
+    \def \gN                    {\mathcal{N}}
     \def \kl                #1#2{D_{\mathrm{KL}}\!\left(#1 ~ \| ~ #2\right)}
+    \def \mI                    {{\bm{I}}}
+    \def \R                     {\mathbb{R}}
+    \def \vone                  {{\bm{1}}}
+    \def \vx                    {\boldsymbol{x}}
+    \def \vzero                 {\bm{0}}
 """
 
 # Translate LaTeX macros to KaTeX and add to options for HTML builder

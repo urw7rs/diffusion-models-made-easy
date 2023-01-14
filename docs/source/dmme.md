@@ -12,7 +12,14 @@
 :ref:`DataModule`
 
 :ref:`CIFAR10`
+```
 
+## DataModules
+
+```{eval-rst}
+:ref:`CIFAR10`
+
+:ref:`LSUN`
 ```
 
 ## Common functions
