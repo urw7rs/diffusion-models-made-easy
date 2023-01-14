@@ -7,7 +7,7 @@ __all__ = [
     "denorm",
     "norm",
 ]
-__version__ = "0.5.2-beta0"
+__version__ = "0.5.2"
 
 from .common.noise import gaussian, gaussian_like, uniform_int, pad
 from .common.vis import make_history
