@@ -1,5 +1,6 @@
 from typing import Tuple
 import functools
+import time
 
 import jax
 from jax import random
@@ -7,7 +8,29 @@ import jax.numpy as jnp
 
 from flax import linen as nn
 
+import optax
+
+import einops
 from einops.layers.flax import Rearrange
+
+import requests
+
+from flax.training import train_state
+
+
+class TrainState(train_state.TrainState):
+    key: jax.random.KeyArray
+
+
+def download_url(url, save_path, chunk_size=128):
+    r = requests.get(url, stream=True)
+    with open(save_path, "wb") as fd:
+        for chunk in r.iter_content(chunk_size=chunk_size):
+            fd.write(chunk)
+
+
+class CIFAR10:
+    pass
 
 
 class ResBlock(nn.Module):
@@ -158,10 +181,68 @@ class UNet(nn.Module):
         return x
 
 
-def train(key, batch_size, height, width, channels):
-    key, subkey = random.split(key)
+batch_size = 128
+height = 32
+width = 32
+channels = 3
 
-    unet = UNet(
+learning_rate = 2e-4
+num_steps = 800_000
+
+timesteps = 1000
+
+
+def mse_loss():
+    pass
+
+
+def forward_process(x, noise, alpha_bar_t):
+    mean = jnp.sqrt(alpha_bar_t) * x
+    stddev = jnp.sqrt(1 - alpha_bar_t)
+    return mean + stddev * noise
+
+
+def reverse_process(x_t, noise, beta_t, alpha_t, alpha_bar_t, noise_in_x_t):
+    mean = (
+        1
+        / jnp.sqrt(alpha_t)
+        * (x_t - beta_t / jnp.sqrt(1 - alpha_bar_t) * noise_in_x_t)
+    )
+    stddev = jnp.sqrt(beta_t)
+    return mean + stddev * noise
+
+
+def linear_schedule(timesteps: int, start: float = 0.0001, end: float = 0.02):
+    beta = jnp.linspace(start, end, num=timesteps)
+    beta = jnp.pad(beta, pad_width=(1, 0))
+    return beta
+
+
+@jax.jit
+def train_step(state: TrainState, batch, dropout_key):
+    def loss_fn(params, x, t, noise, alpha_bar_t):
+        x_t = forward_process(x, noise, alpha_bar_t)
+
+        noise_in_x_t = state.apply_fn(
+            {"params": params}, x_t, t, training=True, rngs={"dropout": dropout_key}
+        )
+
+        loss = jnp.mean(optax.l2_loss(predictions=noise_in_x_t, targets=noise))
+
+        return loss
+
+    loss_grad_fn = jax.value_and_grad(loss_fn)
+    loss_val, grads = loss_grad_fn(
+        state.params, batch["x"], batch["t"], batch["noise"], batch["alpha_bar_t"]
+    )
+    state = state.apply_gradients(grads=grads)
+    return loss_val, state
+
+
+def train(key):
+    params_key, timestep_key, noise_key, dropout_key = random.split(key, num=4)
+
+    model = UNet(
         in_channels=3,
         pos_dim=128,
         emb_dim=512,
@@ -173,10 +254,55 @@ def train(key, batch_size, height, width, channels):
 
     dummy_x = jnp.empty((batch_size, height, width, channels))
     dummy_t = jnp.empty((batch_size,))
-    variables = unet.init(subkey, dummy_x, dummy_t, training=False)
+
+    variables = model.init(params_key, dummy_x, dummy_t, training=False)
+    state, params = variables.pop("params")
+    del variables
+
+    jax.tree_util.tree_map(lambda x: x.shape, params)  # Checking output shapes
+
+    state = TrainState.create(
+        apply_fn=model.apply,
+        params=params,
+        key=dropout_key,
+        tx=optax.adam(learning_rate),
+    )
+
+    beta = linear_schedule(timesteps)
+    beta = einops.rearrange(beta, "t -> t 1 1 1")
+
+    alpha = 1 - beta
+
+    alpha_bar = jnp.cumprod(alpha, axis=0)
+
+    x = random.normal(key, shape=(batch_size, height, width, channels))
+
+    t0 = time.time()
+    for i in range(num_steps):
+        timestep_train_key = random.fold_in(timestep_key, state.step)
+        noise_train_key = random.fold_in(noise_key, state.step)
+
+        t = random.randint(
+            timestep_train_key, shape=(batch_size,), minval=1, maxval=timesteps
+        )
+        noise = random.normal(
+            noise_train_key, shape=(batch_size, height, width, channels)
+        )
+
+        alpha_bar_t = alpha_bar[t]
+        t = t.astype(noise.dtype)
+
+        batch = {"x": x, "t": t, "noise": noise, "alpha_bar_t": alpha_bar_t}
+
+        loss, state = train_step(state, batch, dropout_key)
+
+        if i % 100 == 0:
+            t = time.time() - t0
+            print(t / 100)
+            t0 = time.time()
 
 
 if __name__ == "__main__":
     key = random.PRNGKey(0)
 
-    train(key, batch_size=128, height=32, width=32, channels=3)
+    train(key)
