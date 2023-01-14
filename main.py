@@ -18,6 +18,10 @@ import requests
 from flax.training import train_state
 
 
+half = jnp.float16
+full = jnp.float32
+
+
 class TrainState(train_state.TrainState):
     key: jax.random.KeyArray
 
@@ -43,21 +47,25 @@ class ResBlock(nn.Module):
     def __call__(self, x, t, training: bool):
         residual = x
         Conv3x3 = functools.partial(
-            nn.Conv, features=self.features, kernel_size=(3, 3), padding="same"
+            nn.Conv,
+            features=self.features,
+            kernel_size=(3, 3),
+            padding="same",
+            dtype=half,
         )
 
-        x = nn.GroupNorm()(x)
+        x = nn.GroupNorm(dtype=full)(x)
         x = nn.swish(x)
         x = Conv3x3()(x)
 
         num_channels = x.shape[-1]
         condition = nn.Sequential(
-            [nn.Dense(features=num_channels), Rearrange("b c -> b 1 1 c")]
+            [nn.Dense(features=num_channels, dtype=half), Rearrange("b c -> b 1 1 c")]
         )(t)
 
         x = x + condition
 
-        x = nn.GroupNorm()(x)
+        x = nn.GroupNorm(dtype=full)(x)
         x = nn.swish(x)
 
         if self.drop_rate > 0:
@@ -76,11 +84,11 @@ class ResBlock(nn.Module):
         x = x + residual
 
         if self.with_attention:
-            x = nn.GroupNorm()(x)
+            x = nn.GroupNorm(dtype=full)(x)
             residual = x
 
             x = nn.MultiHeadDotProductAttention(
-                num_heads=1, qkv_features=self.features
+                num_heads=1, qkv_features=self.features, dtype=half
             )(inputs_q=x, inputs_kv=x)
 
             x = x + residual
@@ -88,10 +96,10 @@ class ResBlock(nn.Module):
         return x
 
 
-def embed(t, dim):
+def embed(t, dim, dtype=None):
     half_dim = dim // 2
     embeddings = jnp.log(10000) / (half_dim - 1)
-    embeddings = jnp.exp(jnp.arange(0, half_dim) * -embeddings)
+    embeddings = jnp.exp(jnp.arange(0, half_dim, dtype=dtype) * -embeddings)
     embeddings = embeddings[None, :]
     embeddings = t[:, None] * embeddings
     embeddings = jnp.concatenate(
@@ -112,7 +120,7 @@ class UNet(nn.Module):
 
     @nn.compact
     def __call__(self, x, t, training: bool):
-        t = embed(t, self.pos_dim)
+        t = embed(t, self.pos_dim, dtype=full)
         t = nn.Dense(self.emb_dim)(t)
         t = nn.silu(t)
         t = nn.Dense(self.emb_dim)(t)
@@ -174,7 +182,7 @@ class UNet(nn.Module):
                 x = Conv3x3(features=channels)(x)
 
         # output conv
-        x = nn.GroupNorm()(x)
+        x = nn.GroupNorm(dtype=full)(x)
         x = nn.silu(x)
         x = Conv3x3(features=self.in_channels)(x)
 
@@ -213,7 +221,7 @@ def reverse_process(x_t, noise, beta_t, alpha_t, alpha_bar_t, noise_in_x_t):
 
 
 def linear_schedule(timesteps: int, start: float = 0.0001, end: float = 0.02):
-    beta = jnp.linspace(start, end, num=timesteps)
+    beta = jnp.linspace(start, end, num=timesteps, dtype=full)
     beta = jnp.pad(beta, pad_width=(1, 0))
     return beta
 
