@@ -60,7 +60,7 @@ def main(seed):
         )
 
         if i % 100 == 0:
-            t = time.time() - t0
+            t = time.perf_counter() - t0
             print(f"loss: {loss} {100 / t} it/s")
             t0 = time.perf_counter()
 
