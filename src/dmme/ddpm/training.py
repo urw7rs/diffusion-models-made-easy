@@ -1,9 +1,11 @@
+import functools
+
 import jax
-from jax import random
 import jax.numpy as jnp
 
 from flax import struct
 from flax.training import train_state
+from flax.training.dynamic_scale import DynamicScale
 
 import optax
 
@@ -16,6 +18,7 @@ class TrainState(train_state.TrainState):
     dropout_key: jax.random.KeyArray
     timestep_key: jax.random.KeyArray
     noise_key: jax.random.KeyArray
+    dynamic_scale: DynamicScale
 
 
 @struct.dataclass
@@ -99,30 +102,34 @@ def simple_loss(params, state, dropout_key, alpha_bar_t, image, timestep, noise)
         rngs={"dropout": dropout_key},
     )
 
-    loss = jnp.mean(optax.l2_loss(predictions=noise_in_x_t, targets=noise))
+    loss = optax.l2_loss(predictions=noise_in_x_t, targets=noise)
+    return jnp.mean(loss)
 
-    return loss
 
+def train_step(state: TrainState, dropout_key, alpha_bar_t, image, timestep, noise):
+    def loss_fn(params, state, dropout_key, alpha_bar_t, iamge, timestep, noise):
+        return jnp.mean(
+            simple_loss(params, state, dropout_key, alpha_bar_t, image, timestep, noise)
+        )
 
-def train_step(state: TrainState, alpha_bar, timesteps, image):
-    dropout_key = random.fold_in(state.dropout_key, state.step)
-    timestep_key = random.fold_in(state.timestep_key, state.step)
-    noise_key = random.fold_in(state.noise_key, state.step)
-
-    timestep = random.randint(
-        timestep_key,
-        shape=(image.shape[0],),
-        minval=1,
-        maxval=timesteps,
+    loss_grad_fn = state.dynamic_scale.value_and_grad(loss_fn)
+    dynamic_scale, is_fin, loss, grads = loss_grad_fn(
+        state.params,
+        state,
+        dropout_key,
+        alpha_bar_t,
+        image,
+        timestep,
+        noise,
     )
 
-    noise = random.normal(noise_key, shape=image.shape)
+    new_state = state.apply_gradients(grads=grads)
 
-    alpha_bar_t = alpha_bar[timestep]
-
-    loss_grad_fn = jax.value_and_grad(simple_loss)
-    loss_val, grads = loss_grad_fn(
-        state.params, state, dropout_key, alpha_bar_t, image, timestep, noise
+    select_fn = functools.partial(jnp.where, is_fin)
+    new_state = new_state.replace(
+        opt_state=jax.tree_util.tree_map(
+            select_fn, new_state.opt_state, state.opt_state
+        ),
+        params=jax.tree_util.tree_map(select_fn, new_state.params, state.params),
     )
-    state = state.apply_gradients(grads=grads)
-    return loss_val, state
+    return loss, new_state

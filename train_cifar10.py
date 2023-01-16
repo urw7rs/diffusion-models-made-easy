@@ -2,9 +2,13 @@ import time
 
 import numpy as np
 
+import jax
 from jax import jit
 from jax import random
 import jax.numpy as jnp
+
+from flax import jax_utils
+from flax.training.dynamic_scale import DynamicScale
 
 import optax
 
@@ -66,17 +70,19 @@ class NumpyLoader(data.DataLoader):
         )
 
 
-class Cast(object):
+class ToNumpy(object):
+    def __init__(self, dtype) -> None:
+        self.dtype = dtype
+
     def __call__(self, pic):
-        return np.array(pic, dtype=jnp.float16)
+        return np.array(pic, dtype=self.dtype)
 
 
 def norm(x):
     return (x - 0.5) * 2
 
 
-def main(seed):
-    key = random.PRNGKey(seed)
+def create_train_state(key):
     params_key, timestep_key, noise_key, dropout_key = random.split(key, num=4)
 
     model = ddpm.UNet(
@@ -94,7 +100,7 @@ def main(seed):
 
     variables = model.init(params_key, dummy_x, dummy_t, training=False)
     state, params = variables.pop("params")
-    del variables
+    del state
 
     learning_rate_schedule = optax.join_schedules(
         [
@@ -106,7 +112,8 @@ def main(seed):
         ],
         [warmup_steps],
     )
-    state = ddpm.TrainState.create(
+
+    return ddpm.TrainState.create(
         apply_fn=model.apply,
         params=params,
         dropout_key=dropout_key,
@@ -117,7 +124,13 @@ def main(seed):
             optax.adam(learning_rate=learning_rate_schedule),
             optax.ema(decay=ema_decay),
         ),
+        dynamic_scale=DynamicScale(),
     )
+
+
+def main(seed):
+    key = random.PRNGKey(seed)
+    state = create_train_state(key)
 
     schedule = ddpm.LinearSchedule.create(timesteps)
 
@@ -126,7 +139,7 @@ def main(seed):
     train_set = datasets.CIFAR10(
         root=".",
         train=True,
-        transform=TF.Compose([TF.RandomHorizontalFlip(), Cast(), norm]),
+        transform=TF.Compose([TF.RandomHorizontalFlip(), ToNumpy(jnp.float16), norm]),
         download=True,
     )
 
@@ -137,17 +150,33 @@ def main(seed):
     t0 = time.perf_counter()
     step = 1
     while step < train_iterations:
-        for x, y in dataloader:
+        for x, _ in dataloader:
             if step > train_iterations:
                 break
 
+            timestep = random.randint(
+                random.fold_in(state.timestep_key, state.step),
+                shape=(batch_size,),
+                minval=1,
+                maxval=timesteps,
+            )
+
+            noise = random.normal(
+                random.fold_in(state.noise_key, state.step), shape=x.shape
+            )
+
             loss, state = train_step_jitted(
-                state, schedule.alpha_bar, schedule.timesteps, x
+                state,
+                random.fold_in(state.dropout_key, state.step),
+                schedule.alpha_bar[timestep],
+                x,
+                timestep,
+                noise,
             )
 
             if step % 100 == 0:
                 t = time.perf_counter() - t0
-                print(f"loss: {loss} {100 / t} it/s")
+                print(f"step: {step} {t} seconds, loss: {loss} {100 / t} it/s")
                 t0 = time.perf_counter()
 
             step += 1
