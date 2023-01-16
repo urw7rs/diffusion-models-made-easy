@@ -8,10 +8,6 @@ from flax import linen as nn
 
 from einops.layers.flax import Rearrange
 
-from flax.training.train_state import TrainState
-
-import optax
-
 half = jnp.float16
 full = jnp.float32
 
@@ -255,24 +251,3 @@ def reverse_process(x_t, noise, beta_t, alpha_t, alpha_bar_t, noise_in_x_t):
     )
     stddev = jnp.sqrt(beta_t)
     return mean + stddev * noise
-
-
-@jax.jit
-def train_step(state: TrainState, batch, dropout_key):
-    def loss_fn(params, x, t, noise, alpha_bar_t):
-        x_t = forward_process(x, noise, alpha_bar_t)
-
-        noise_in_x_t = state.apply_fn(
-            {"params": params}, x_t, t, training=True, rngs={"dropout": dropout_key}
-        )
-
-        loss = jnp.mean(optax.l2_loss(predictions=noise_in_x_t, targets=noise))
-
-        return loss
-
-    loss_grad_fn = jax.value_and_grad(loss_fn)
-    loss_val, grads = loss_grad_fn(
-        state.params, batch["x"], batch["t"], batch["noise"], batch["alpha_bar_t"]
-    )
-    state = state.apply_gradients(grads=grads)
-    return loss_val, state
