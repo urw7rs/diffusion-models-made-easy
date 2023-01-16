@@ -112,24 +112,38 @@ def train_step(state: TrainState, dropout_key, alpha_bar_t, image, timestep, noi
             simple_loss(params, state, dropout_key, alpha_bar_t, image, timestep, noise)
         )
 
-    loss_grad_fn = state.dynamic_scale.value_and_grad(loss_fn)
-    dynamic_scale, is_fin, loss, grads = loss_grad_fn(
-        state.params,
-        state,
-        dropout_key,
-        alpha_bar_t,
-        image,
-        timestep,
-        noise,
-    )
+    if state.dynamic_scale:
+        loss_grad_fn = state.dynamic_scale.value_and_grad(loss_fn)
+        dynamic_scale, is_fin, loss, grads = loss_grad_fn(
+            state.params,
+            state,
+            dropout_key,
+            alpha_bar_t,
+            image,
+            timestep,
+            noise,
+        )
 
-    new_state = state.apply_gradients(grads=grads)
+        new_state = state.apply_gradients(grads=grads)
 
-    select_fn = functools.partial(jnp.where, is_fin)
-    new_state = new_state.replace(
-        opt_state=jax.tree_util.tree_map(
-            select_fn, new_state.opt_state, state.opt_state
-        ),
-        params=jax.tree_util.tree_map(select_fn, new_state.params, state.params),
-    )
+        select_fn = functools.partial(jnp.where, is_fin)
+        new_state = new_state.replace(
+            opt_state=jax.tree_util.tree_map(
+                select_fn, new_state.opt_state, state.opt_state
+            ),
+            params=jax.tree_util.tree_map(select_fn, new_state.params, state.params),
+        )
+    else:
+        loss_grad_fn = jax.value_and_grad(loss_fn)
+        loss, grads = loss_grad_fn(
+            state.params,
+            state,
+            dropout_key,
+            alpha_bar_t,
+            image,
+            timestep,
+            noise,
+        )
+
+        new_state = state.apply_gradients(grads=grads)
     return loss, new_state
