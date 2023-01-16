@@ -2,12 +2,10 @@ import time
 
 import numpy as np
 
-import jax
 from jax import jit
 from jax import random
 import jax.numpy as jnp
 
-from flax import jax_utils
 from flax.training.dynamic_scale import DynamicScale
 
 import optax
