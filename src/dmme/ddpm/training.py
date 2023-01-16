@@ -107,22 +107,14 @@ def simple_loss(params, state, dropout_key, alpha_bar_t, image, timestep, noise)
 
 
 def train_step(state: TrainState, dropout_key, alpha_bar_t, image, timestep, noise):
-    def loss_fn(params, state, dropout_key, alpha_bar_t, iamge, timestep, noise):
+    def loss_fn(params):
         return jnp.mean(
             simple_loss(params, state, dropout_key, alpha_bar_t, image, timestep, noise)
         )
 
     if state.dynamic_scale:
         loss_grad_fn = state.dynamic_scale.value_and_grad(loss_fn)
-        dynamic_scale, is_fin, loss, grads = loss_grad_fn(
-            state.params,
-            state,
-            dropout_key,
-            alpha_bar_t,
-            image,
-            timestep,
-            noise,
-        )
+        dynamic_scale, is_fin, loss, grads = loss_grad_fn(state.params)
 
         new_state = state.apply_gradients(grads=grads)
 
@@ -135,15 +127,7 @@ def train_step(state: TrainState, dropout_key, alpha_bar_t, image, timestep, noi
         )
     else:
         loss_grad_fn = jax.value_and_grad(loss_fn)
-        loss, grads = loss_grad_fn(
-            state.params,
-            state,
-            dropout_key,
-            alpha_bar_t,
-            image,
-            timestep,
-            noise,
-        )
+        loss, grads = loss_grad_fn(state.params)
 
         new_state = state.apply_gradients(grads=grads)
     return loss, new_state
