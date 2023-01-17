@@ -119,11 +119,15 @@ def train_step(state: TrainState, dropout_key, alpha_bar_t, image, timestep, noi
         new_state = state.apply_gradients(grads=grads)
 
         select_fn = functools.partial(jnp.where, is_fin)
+
         new_state = new_state.replace(
             opt_state=jax.tree_util.tree_map(
-                select_fn, new_state.opt_state, state.opt_state
+                select_fn,
+                new_state.opt_state,
+                state.opt_state,
             ),
             params=jax.tree_util.tree_map(select_fn, new_state.params, state.params),
+            dynamic_scale=dynamic_scale,
         )
     else:
         loss_grad_fn = jax.value_and_grad(loss_fn)
