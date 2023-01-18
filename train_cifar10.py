@@ -122,7 +122,7 @@ def create_train_state(key):
             optax.adam(learning_rate=learning_rate_schedule),
             optax.ema(decay=ema_decay),
         ),
-        dynamic_scale=DynamicScale(),
+        dynamic_scale=DynamicScale(growth_factor=10, growth_interval=1),
     )
 
 
