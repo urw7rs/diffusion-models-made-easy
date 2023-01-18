@@ -156,7 +156,8 @@ def main(seed):
 
             loss, state = train_step_jitted(state, schedule, x)
 
-            print(f"loss: {loss} iter: {step}")
+            if step % 50 == 0:
+                print(f"loss: {loss} iter: {step}")
 
 
 if __name__ == "__main__":
