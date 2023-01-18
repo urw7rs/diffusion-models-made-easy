@@ -1,6 +1,7 @@
 import functools
 
 import jax
+from jax import random
 import jax.numpy as jnp
 
 from flax import struct
@@ -106,13 +107,30 @@ def simple_loss(params, state, dropout_key, alpha_bar_t, image, timestep, noise)
     return jnp.mean(loss)
 
 
-def train_step(state: TrainState, dropout_key, alpha_bar_t, image, timestep, noise):
+def train_step(state: TrainState, schedule: LinearSchedule, image):
+    shape = image.shape[:-3]
+
+    timestep = random.randint(
+        random.fold_in(state.timestep_key, state.step),
+        shape=shape,
+        minval=1,
+        maxval=schedule.timesteps,
+    )
+
+    noise = random.normal(
+        random.fold_in(state.noise_key, state.step), shape=image.shape
+    )
+
+    dropout_key = random.fold_in(state.dropout_key, state.step)
+
+    alpha_bar_t = schedule.alpha_bar[timestep]
+
     def loss_fn(params):
         return jnp.mean(
             simple_loss(params, state, dropout_key, alpha_bar_t, image, timestep, noise)
         )
 
-    if state.dynamic_scale:
+    def mixed_precision():
         loss_grad_fn = state.dynamic_scale.value_and_grad(loss_fn)
         dynamic_scale, is_fin, loss, grads = loss_grad_fn(state.params)
 
@@ -129,9 +147,16 @@ def train_step(state: TrainState, dropout_key, alpha_bar_t, image, timestep, noi
             params=jax.tree_util.tree_map(select_fn, new_state.params, state.params),
             dynamic_scale=dynamic_scale,
         )
-    else:
+        return loss, new_state
+
+    def normal_precision():
         loss_grad_fn = jax.value_and_grad(loss_fn)
         loss, grads = loss_grad_fn(state.params)
 
         new_state = state.apply_gradients(grads=grads)
+        return loss, new_state
+
+    loss, new_state = jax.lax.cond(
+        state.dynamic_scale is None, mixed_precision, normal_precision
+    )
     return loss, new_state

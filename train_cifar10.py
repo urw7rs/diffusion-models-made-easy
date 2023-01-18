@@ -1,5 +1,7 @@
 import time
 
+from tqdm import tqdm
+
 import numpy as np
 
 from jax import jit
@@ -145,39 +147,16 @@ def main(seed):
         train_set, batch_size=batch_size, shuffle=True, num_workers=0, drop_last=True
     )
 
-    t0 = time.perf_counter()
-    step = 1
+    step = 0
     while step < train_iterations:
-        for x, _ in dataloader:
-            if step > train_iterations:
+        for x, _ in tqdm(dataloader):
+            if step == train_iterations:
                 break
-
-            timestep = random.randint(
-                random.fold_in(state.timestep_key, state.step),
-                shape=(batch_size,),
-                minval=1,
-                maxval=timesteps,
-            )
-
-            noise = random.normal(
-                random.fold_in(state.noise_key, state.step), shape=x.shape
-            )
-
-            loss, state = train_step_jitted(
-                state,
-                random.fold_in(state.dropout_key, state.step),
-                schedule.alpha_bar[timestep],
-                x,
-                timestep,
-                noise,
-            )
-
-            if step % 100 == 0:
-                t = time.perf_counter() - t0
-                print(f"step: {step} {t} seconds, loss: {loss} {100 / t} it/s")
-                t0 = time.perf_counter()
-
             step += 1
+
+            loss, state = train_step_jitted(state, schedule, x)
+
+            print(f"loss: {loss} iter: {step}")
 
 
 if __name__ == "__main__":
