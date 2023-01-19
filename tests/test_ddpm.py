@@ -1,60 +1,47 @@
-import torch
+from jax import jit
+from jax import random
 
-from dmme.diffusion_models import DDPM
-from dmme.models.ddpm import UNet
+from dmme import ddpm
 
 
-def test_ddpm_training():
-    model = UNet(
-        in_channels=3,
-        pos_dim=4,
-        emb_dim=8,
-        num_groups=2,
-        channels_per_depth=(4, 8, 16, 32),
-        num_blocks=3,
+def test_state(key):
+    hparams = ddpm.train.HyperParams()
+    state = ddpm.train.create_state(key, hparams)
+
+
+def test_ddpm_train_step(key):
+    hparams = ddpm.train.HyperParams()
+    state = ddpm.train.create_state(key, hparams)
+    # TODO: set dynamic_scale to None in create_state arguments
+    state.replace(dynamic_scale=None)
+
+    train_step_jitted = jit(ddpm.train.step)
+
+    key, subkey = random.split(key)
+    x = random.normal(
+        subkey,
+        shape=(hparams.batch_size, hparams.height, hparams.width, hparams.channels),
     )
-    ddpm = DDPM(model, timesteps=100)
+    loss, state = train_step_jitted(state, x)
 
-    x_0 = torch.randn(3, 3, 32, 32)
 
-    loss: torch.Tensor = ddpm.training_step(x_0)
+def test_ddpm_train_step_mixed_precision(key):
+    hparams = ddpm.train.HyperParams()
+    state = ddpm.train.create_state(key, hparams)
 
-    assert torch.isnan(loss).any().item() == False
-    assert loss.ndim == 0
+    train_step_jitted = jit(ddpm.train.step)
+
+    key, subkey = random.split(key)
+    x = random.normal(
+        subkey,
+        shape=(hparams.batch_size, hparams.height, hparams.width, hparams.channels),
+    )
+    loss, state = train_step_jitted(state, x)
 
 
 def test_ddpm_sampling():
-    model = UNet(
-        in_channels=3,
-        pos_dim=4,
-        emb_dim=8,
-        num_groups=2,
-        channels_per_depth=(4, 8, 16, 32),
-        num_blocks=3,
-    )
-    ddpm = DDPM(model, timesteps=100)
-
-    x_t = torch.randn(3, 3, 32, 32)
-    t = torch.randint(0, 100, size=(3,))
-
-    output = ddpm.sampling_step(x_t, t)
-
-    assert output.size() == x_t.size()
+    pass
 
 
-def test_ddpm_generate():
-    model = UNet(
-        in_channels=3,
-        pos_dim=4,
-        emb_dim=8,
-        num_groups=2,
-        channels_per_depth=(4, 8, 16, 32),
-        num_blocks=3,
-    )
-    ddpm = DDPM(model, timesteps=100)
-
-    x_t = torch.randn(2, 3, 32, 32)
-
-    output = ddpm.generate(x_t.size())
-
-    assert output.size() == x_t.size()
+def test_full_step():
+    pass

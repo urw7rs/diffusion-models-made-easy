@@ -1,16 +1,19 @@
 import functools
 
+from dataclasses import dataclass
+
 import jax
 from jax import random
 import jax.numpy as jnp
 
-from flax import struct
 from flax.training import train_state
 from flax.training.dynamic_scale import DynamicScale
 
 import optax
 
-from einops import rearrange
+from .models import UNet
+
+from .schedule import Linear
 
 Array = jax.Array
 
@@ -20,36 +23,70 @@ class TrainState(train_state.TrainState):
     timestep_key: jax.random.KeyArray
     noise_key: jax.random.KeyArray
     dynamic_scale: DynamicScale
+    schedule: Linear
 
 
-@struct.dataclass
-class LinearSchedule:
-    r"""constants increasing linearly from :math:`10^{-4}` to :math:`0.02`
+@dataclass
+class HyperParams:
+    batch_size = 128
+    height = width = 32
+    channels = 3
+    timesteps = 1000
 
-    Args:
-        timesteps: total timesteps
-        start: starting value, defaults to 0.0001
-        end: end value, defaults to 0.02
+    learning_rate = 2e-4
+    grad_clip_norm = 1.0
+    ema_decay = 0.999
+    warmup_steps = 5000
+    train_iterations = 800_000
 
-    Returns:
-        a 1d tensor representing :math:`\beta_t` indexed by :math:`t`
-    """
-    beta: Array
-    alpha: Array
-    alpha_bar: Array
-    timesteps: int
 
-    @classmethod
-    def create(
-        cls, timesteps: int, start: float = 0.0001, end: float = 0.02, dtype=None
-    ):
-        beta = jnp.linspace(start, end, num=timesteps, dtype=dtype)
-        beta = jnp.pad(beta, pad_width=(1, 0))
-        beta = rearrange(beta, "t -> t 1 1 1")
-        alpha = 1 - beta
-        alpha_bar = jnp.cumprod(alpha, axis=0)
-        timesteps = beta.shape[0] - 1
-        return cls(beta, alpha, alpha_bar, timesteps)
+def create_state(key, hparams: HyperParams):
+    params_key, timestep_key, noise_key, dropout_key = random.split(key, num=4)
+
+    model = UNet(
+        in_channels=3,
+        pos_dim=128,
+        emb_dim=512,
+        drop_rate=0.1,
+        channels_per_depth=(128, 256, 256, 256),
+        num_blocks=2,
+        attention_depths=(2,),
+    )
+
+    dummy_x = jnp.empty(
+        (hparams.batch_size, hparams.height, hparams.width, hparams.channels)
+    )
+    dummy_t = jnp.empty((hparams.batch_size,))
+
+    variables = model.init(params_key, dummy_x, dummy_t, training=False)
+    state, params = variables.pop("params")
+    del state
+
+    learning_rate_schedule = optax.join_schedules(
+        [
+            optax.linear_schedule(
+                init_value=hparams.learning_rate / hparams.warmup_steps,
+                end_value=hparams.learning_rate,
+                transition_steps=hparams.warmup_steps,
+            ),
+        ],
+        [hparams.warmup_steps],
+    )
+
+    return TrainState.create(
+        apply_fn=model.apply,
+        params=params,
+        dropout_key=dropout_key,
+        timestep_key=timestep_key,
+        noise_key=noise_key,
+        tx=optax.chain(
+            optax.clip_by_global_norm(hparams.grad_clip_norm),
+            optax.adam(learning_rate=learning_rate_schedule),
+            optax.ema(decay=hparams.ema_decay),
+        ),
+        dynamic_scale=DynamicScale(growth_factor=10, growth_interval=1),
+        schedule=Linear.create(hparams.timesteps),
+    )
 
 
 def forward_process(alpha_bar_t, x, noise):
@@ -68,30 +105,6 @@ def forward_process(alpha_bar_t, x, noise):
     return mean + stddev * noise
 
 
-def reverse_process(alpha_bar_t, beta_t, x_t, noise, noise_in_x_t):
-    r"""Reverse Denoising Process, :math:`p_\theta(x_{t-1}|x_t)`
-
-    Args:
-        x_t: :math:`\x_t` of shape :math:`(N, H, W, C)`
-        beta_t: :math:`\beta_t` of shape :math:`(N, 1, 1, *)`
-        alpha_t: :math:`\alpha_t` of shape :math:`(N, 1, 1, *)`
-        alpha_bar_t: :math:`\bar\alpha_t` of shape :math:`(N, 1, 1, *)`
-        noise_in_x_t: estimated noise in :math:`x_t` predicted by a neural network
-        variance: variance of the reverse process, either learned or fixed
-        noise: noise sampled from :math:`\mathcal{N}(0, I)`
-
-    Returns:
-        denoising distirbution :math:`q(x_t|x_{t-1})`
-    """
-    mean = (
-        1
-        / jnp.sqrt(alpha_bar_t)
-        * (x_t - beta_t / jnp.sqrt(1 - alpha_bar_t) * noise_in_x_t)
-    )
-    stddev = jnp.sqrt(beta_t)
-    return mean + stddev * noise
-
-
 def simple_loss(params, state, dropout_key, alpha_bar_t, image, timestep, noise):
     x_t = forward_process(alpha_bar_t, image, noise)
 
@@ -107,12 +120,13 @@ def simple_loss(params, state, dropout_key, alpha_bar_t, image, timestep, noise)
     return jnp.mean(loss)
 
 
-def train_step(state: TrainState, schedule: LinearSchedule, image):
-    shape = image.shape[:-3]
+def step(state: TrainState, image):
+    schedule = state.schedule
 
+    leading_dims = image.shape[:-3]
     timestep = random.randint(
         random.fold_in(state.timestep_key, state.step),
-        shape=shape,
+        shape=leading_dims,
         minval=1,
         maxval=schedule.timesteps,
     )

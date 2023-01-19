@@ -1,5 +1,3 @@
-import time
-
 from tqdm import tqdm
 
 import numpy as np
@@ -7,10 +5,6 @@ import numpy as np
 from jax import jit
 from jax import random
 import jax.numpy as jnp
-
-from flax.training.dynamic_scale import DynamicScale
-
-import optax
 
 from torch.utils import data
 
@@ -78,68 +72,23 @@ class ToNumpy(object):
         return np.array(pic, dtype=self.dtype)
 
 
-def norm(x):
-    return (x - 0.5) * 2
-
-
-def create_train_state(key):
-    params_key, timestep_key, noise_key, dropout_key = random.split(key, num=4)
-
-    model = ddpm.UNet(
-        in_channels=3,
-        pos_dim=128,
-        emb_dim=512,
-        drop_rate=0.1,
-        channels_per_depth=(128, 256, 256, 256),
-        num_blocks=2,
-        attention_depths=(2,),
-    )
-
-    dummy_x = jnp.empty((batch_size, height, width, channels))
-    dummy_t = jnp.empty((batch_size,))
-
-    variables = model.init(params_key, dummy_x, dummy_t, training=False)
-    state, params = variables.pop("params")
-    del state
-
-    learning_rate_schedule = optax.join_schedules(
-        [
-            optax.linear_schedule(
-                init_value=learning_rate / warmup_steps,
-                end_value=learning_rate,
-                transition_steps=warmup_steps,
-            ),
-        ],
-        [warmup_steps],
-    )
-
-    return ddpm.TrainState.create(
-        apply_fn=model.apply,
-        params=params,
-        dropout_key=dropout_key,
-        timestep_key=timestep_key,
-        noise_key=noise_key,
-        tx=optax.chain(
-            optax.clip_by_global_norm(grad_clip_norm),
-            optax.adam(learning_rate=learning_rate_schedule),
-            optax.ema(decay=ema_decay),
-        ),
-        dynamic_scale=DynamicScale(growth_factor=10, growth_interval=1),
-    )
-
-
 def main(seed):
     key = random.PRNGKey(seed)
-    state = create_train_state(key)
+    hparams = ddpm.train.HyperParams()
+    state = ddpm.train.create_state(key, hparams)
 
-    schedule = ddpm.LinearSchedule.create(timesteps)
-
-    train_step_jitted = jit(ddpm.train_step)
+    train_step_jitted = jit(ddpm.train.step)
 
     train_set = datasets.CIFAR10(
         root=".",
         train=True,
-        transform=TF.Compose([TF.RandomHorizontalFlip(), ToNumpy(jnp.float16), norm]),
+        transform=TF.Compose(
+            [
+                TF.RandomHorizontalFlip(),
+                ToNumpy(jnp.float16),
+                ddpm.data.norm,
+            ]
+        ),
         download=True,
     )
 
@@ -154,7 +103,7 @@ def main(seed):
                 break
             step += 1
 
-            loss, state = train_step_jitted(state, schedule, x)
+            loss, state = train_step_jitted(state, x)
 
             if step % 50 == 0:
                 print(f"loss: {loss} iter: {step}")
