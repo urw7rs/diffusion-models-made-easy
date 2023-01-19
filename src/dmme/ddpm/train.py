@@ -8,6 +8,7 @@ import jax.numpy as jnp
 
 from flax.training import train_state
 from flax.training.dynamic_scale import DynamicScale
+from flax import struct
 
 import optax
 
@@ -19,29 +20,28 @@ Array = jax.Array
 
 
 class TrainState(train_state.TrainState):
-    dropout_key: jax.random.KeyArray
-    timestep_key: jax.random.KeyArray
-    noise_key: jax.random.KeyArray
+    key: jax.random.KeyArray
     dynamic_scale: DynamicScale
     schedule: Linear
 
 
-@dataclass
+@struct.dataclass
 class HyperParams:
-    batch_size = 128
-    height = width = 32
-    channels = 3
-    timesteps = 1000
+    batch_size: int = 128
+    height: int = 32
+    width: int = 32
+    channels: int = 3
+    timesteps: int = 1000
 
-    learning_rate = 2e-4
-    grad_clip_norm = 1.0
-    ema_decay = 0.999
-    warmup_steps = 5000
-    train_iterations = 800_000
+    learning_rate: float = 2e-4
+    grad_clip_norm: float = 1.0
+    ema_decay: float = 0.999
+    warmup_steps: int = 5000
+    train_iterations: int = 800_000
 
 
 def create_state(key, hparams: HyperParams):
-    params_key, timestep_key, noise_key, dropout_key = random.split(key, num=4)
+    dropout_key, params_key = random.split(key)
 
     model = UNet(
         in_channels=3,
@@ -76,9 +76,7 @@ def create_state(key, hparams: HyperParams):
     return TrainState.create(
         apply_fn=model.apply,
         params=params,
-        dropout_key=dropout_key,
-        timestep_key=timestep_key,
-        noise_key=noise_key,
+        key=dropout_key,
         tx=optax.chain(
             optax.clip_by_global_norm(hparams.grad_clip_norm),
             optax.adam(learning_rate=learning_rate_schedule),
@@ -123,19 +121,19 @@ def simple_loss(params, state, dropout_key, alpha_bar_t, image, timestep, noise)
 def step(state: TrainState, image):
     schedule = state.schedule
 
+    key = random.fold_in(state.key, state.step)
+
+    timestep_key, noise_key, dropout_key = random.split(key, num=3)
+
     leading_dims = image.shape[:-3]
     timestep = random.randint(
-        random.fold_in(state.timestep_key, state.step),
+        timestep_key,
         shape=leading_dims,
         minval=1,
         maxval=schedule.timesteps,
     )
 
-    noise = random.normal(
-        random.fold_in(state.noise_key, state.step), shape=image.shape
-    )
-
-    dropout_key = random.fold_in(state.dropout_key, state.step)
+    noise = random.normal(noise_key, shape=image.shape)
 
     alpha_bar_t = schedule.alpha_bar[timestep]
 

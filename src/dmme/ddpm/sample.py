@@ -1,4 +1,34 @@
+from typing import Any, Callable
+
+import jax
+from jax import random
 import jax.numpy as jnp
+
+from flax import struct
+
+from .train import HyperParams
+from .schedule import Linear
+
+
+@struct.dataclass
+class SampleState(struct.PyTreeNode):
+    step: int
+    apply_fn: Callable
+    params: Any
+    hparams: HyperParams
+    schedule: Any
+    key: random.KeyArray
+
+    @classmethod
+    def create(cls, apply_fn, params, hparams, key):
+        return cls(
+            step=0,
+            apply_fn=apply_fn,
+            params=params,
+            hparams=hparams,
+            schedule=Linear.create(hparams.timesteps),
+            key=key,
+        )
 
 
 def reverse_process(alpha_bar_t, beta_t, x_t, noise, noise_in_x_t):
@@ -21,9 +51,31 @@ def reverse_process(alpha_bar_t, beta_t, x_t, noise, noise_in_x_t):
         / jnp.sqrt(alpha_bar_t)
         * (x_t - beta_t / jnp.sqrt(1 - alpha_bar_t) * noise_in_x_t)
     )
-    stddev = jnp.sqrt(beta_t)
-    return mean + stddev * noise
+
+    def sample():
+        stddev = jnp.sqrt(beta_t)
+        return mean + stddev * noise
+
+    return jax.lax.cond(noise == 0, sample, lambda x: x)
 
 
-def step(state):
-    pass
+def step(state: SampleState, x_t, timestep):
+    schedule = state.schedule
+
+    noise_in_x_t = state.apply_fn(
+        {"params": state.params}, x_t, timestep, training=False
+    )
+
+    alpha_bar_t = schedule.alpha_bar[timestep]
+    beta_t = schedule.beta[timestep]
+
+    def sample_noise():
+        return random.normal(state.key, shape=x_t.shape)
+
+    def zero_noise():
+        return jnp.zeros_like(x_t)
+
+    noise = jax.lax.cond(timestep > 1, sample_noise, zero_noise)
+
+    x_t_minus_one = reverse_process(alpha_bar_t, beta_t, x_t, noise, noise_in_x_t)
+    return x_t_minus_one

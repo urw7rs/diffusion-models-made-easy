@@ -1,3 +1,4 @@
+import time
 from tqdm import tqdm
 
 import numpy as np
@@ -73,12 +74,6 @@ class ToNumpy(object):
 
 
 def main(seed):
-    key = random.PRNGKey(seed)
-    hparams = ddpm.train.HyperParams()
-    state = ddpm.train.create_state(key, hparams)
-
-    train_step_jitted = jit(ddpm.train.step)
-
     train_set = datasets.CIFAR10(
         root=".",
         train=True,
@@ -96,6 +91,17 @@ def main(seed):
         train_set, batch_size=batch_size, shuffle=True, num_workers=0, drop_last=True
     )
 
+    key = random.PRNGKey(seed)
+    hparams = ddpm.train.HyperParams()
+    state = ddpm.train.create_state(key, hparams)
+
+    dummy_x, _ = next(iter(dataloader))
+    print("compiling training step...")
+    t0 = time.perf_counter()
+    train_step_compiled = jit(ddpm.train.step).lower(state, dummy_x).compile()
+    t = time.perf_counter() - t0
+    print(f"finished in {t}s")
+
     step = 0
     while step < train_iterations:
         for x, _ in tqdm(dataloader):
@@ -103,9 +109,9 @@ def main(seed):
                 break
             step += 1
 
-            loss, state = train_step_jitted(state, x)
+            loss, state = train_step_compiled(state, x)
 
-            if step % 50 == 0:
+            if step % 200 == 0:
                 print(f"loss: {loss} iter: {step}")
 
 
