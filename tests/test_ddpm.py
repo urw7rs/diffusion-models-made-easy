@@ -1,5 +1,7 @@
-from jax import jit
+import jax.numpy as jnp
 from jax import random
+
+from jax import jit
 
 from dmme import ddpm
 
@@ -39,9 +41,29 @@ def test_ddpm_train_step_mixed_precision(key):
     loss, state = train_step_jitted(state, x)
 
 
-def test_ddpm_sampling():
-    pass
+def test_ddpm_sampling(key):
+    hparams = ddpm.train.HyperParams(batch_size=4)
+    state = ddpm.train.create_state(key, hparams)
 
+    sample_step_jitted = jit(ddpm.sample.step)
 
-def test_full_step():
-    pass
+    key, subkey = random.split(key)
+
+    x_t = random.normal(
+        subkey,
+        shape=(hparams.batch_size, hparams.height, hparams.width, hparams.channels),
+    )
+
+    key, subkey = random.split(key)
+
+    leading_dims = x_t.shape[:-3]
+    timestep = random.randint(
+        subkey,
+        shape=leading_dims,
+        minval=1,
+        maxval=hparams.timesteps,
+    )
+    denoised_x = sample_step_jitted(state, x_t, timestep, subkey)
+
+    timesteps = jnp.ones_like(timestep)
+    denoised_x = sample_step_jitted(state, x_t, timestep, subkey)
