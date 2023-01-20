@@ -1,4 +1,3 @@
-import time
 from tqdm import tqdm
 
 import numpy as np
@@ -88,19 +87,14 @@ def main(seed):
     )
 
     dataloader = NumpyLoader(
-        train_set, batch_size=batch_size, shuffle=True, num_workers=0, drop_last=True
+        train_set, batch_size=batch_size, shuffle=True, num_workers=6, drop_last=True
     )
 
     key = random.PRNGKey(seed)
     hparams = ddpm.train.HyperParams()
     state = ddpm.train.create_state(key, hparams)
 
-    dummy_x, _ = next(iter(dataloader))
-    print("compiling training step...")
-    t0 = time.perf_counter()
-    train_step_compiled = jit(ddpm.train.step).lower(state, dummy_x).compile()
-    t = time.perf_counter() - t0
-    print(f"finished in {t}s")
+    train_step_jitted = jit(ddpm.train.step)
 
     step = 0
     while step < train_iterations:
@@ -109,7 +103,7 @@ def main(seed):
                 break
             step += 1
 
-            loss, state = train_step_compiled(state, x)
+            loss, state = train_step_jitted(state, x)
 
             if step % 200 == 0:
                 print(f"loss: {loss} iter: {step}")
