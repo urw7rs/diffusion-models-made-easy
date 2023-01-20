@@ -1,0 +1,2 @@
+class ClassifierFreeGuidance:
+    pass
